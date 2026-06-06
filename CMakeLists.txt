@@ -12,6 +12,9 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Emit compile_commands.json so editors/language servers resolve include paths
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Default to a debug build if the user didn't pick one
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Debug)
@@ -28,3 +31,12 @@ if(MSVC)
 else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+
+# Tests
+enable_testing()
+
+add_executable(test_bus tests/test_bus.cpp)
+target_include_directories(test_bus PRIVATE "${CMAKE_SOURCE_DIR}/include")
+
+add_test(NAME test_bus COMMAND test_bus)
