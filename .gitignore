@@ -69,5 +69,7 @@ Testing/
 .cache/
 
 
+.vscode/
+
 # For the Bricktertainment System:
 roms/
