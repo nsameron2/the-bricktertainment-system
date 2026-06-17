@@ -15,15 +15,30 @@ public:
     }
 
 
-
 private:
     // --- REGISTERS ---
     uint8_t A;
     uint8_t X, Y;
     uint8_t S;
-    uint8_t P;
+    uint8_t P; // Status Flag
     
     uint16_t PC;
+
+    // Status flags, the condition after an operation
+    enum StatusFlag : uint8_t {
+        C = 1 << 0, // CARRY
+        Z = 1 << 1, // ZERO
+        I = 1 << 2, // INTERRUPT
+        D = 1 << 3, // DECIMAL (unused)
+        B = 1 << 4, // BREAK
+        U = 1 << 5, // UNUSED
+        V = 1 << 6, // OVERFLOW
+        N = 1 << 7, // NEGATIVE
+    };
+
+    // Register helpers
+    void setFlag(StatusFlag flag, bool value);
+    bool getFlag(StatusFlag flag) const;
 
 
     // --- BUS ---
