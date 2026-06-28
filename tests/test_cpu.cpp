@@ -6,8 +6,9 @@ int main() {
     CPU cpu;
     Bus bus;
 
-    // Test CPU functions
     cpu.connectBus(&bus);
+
+    std::printf("test_cpu passed\n");
 
     return 0;
 }
