@@ -40,6 +40,9 @@ private:
     void setFlag(StatusFlag flag, bool value);
     bool getFlag(StatusFlag flag) const;
 
+    void reset();
+    void powerOn();
+
 
     // --- BUS ---
     Bus* bus = nullptr;
