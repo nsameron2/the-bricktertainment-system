@@ -293,6 +293,7 @@ void CPU::powerOn() {
     A = 0x00;
     X = 0x00; 
     Y = 0x00;
+    P = 0x00;
 
     // PC requires the same process for power on as it did for reset
     uint8_t low = read(0xFFFC);
