@@ -41,6 +41,15 @@ bool Cartridge::load(const char* path) {
         ? static_cast<size_t>(chrBanks) * CHR_BANK_SIZE
         : CHR_BANK_SIZE;
 
+
+    // Get cartridge mapper id and handle accordingly, we only support mapper 0 for now
+    const uint8_t mapperId = (header[6] >> 4) | (header[7] & 0xF0);
+    if(mapperId != 0) {
+        return false;
+    }
+
+
+
     // header[6] = Optional trainer
     if (header[6] & 0x04) {
         cart.seekg(512, std::ios::cur);
