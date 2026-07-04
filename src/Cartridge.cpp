@@ -29,8 +29,8 @@ bool Cartridge::load(const char* path) {
     // Begin ROM loading
     // header[4] = Number of PRG ROM banks
     // header[5] = number of CHR ROM banks
-    const uint8_t prgBanks = header[4];
-    const uint8_t chrBanks = header[5];
+    prgBanks = header[4];
+    chrBanks = header[5];
 
     constexpr size_t PRG_BANK_SIZE = 16 * 1024;
     constexpr size_t CHR_BANK_SIZE = 8 * 1024;
@@ -43,7 +43,7 @@ bool Cartridge::load(const char* path) {
 
 
     // Get cartridge mapper id and handle accordingly, we only support mapper 0 for now
-    const uint8_t mapperId = (header[6] >> 4) | (header[7] & 0xF0);
+    mapperId = (header[6] >> 4) | (header[7] & 0xF0);
     if(mapperId != 0) {
         return false;
     }
