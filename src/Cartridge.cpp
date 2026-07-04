@@ -14,12 +14,10 @@ constexpr uint16_t PRG_ROM_32KB_MASK = 0x7FFF;
 }
 
 bool Cartridge::load(const char* path) {
-    prgBanks = 0;
-    chrBanks = 0;
-    mapperId = 0;
-    prgData.clear();
-    chrData.clear();
+    // Clear possible old ROM data
+    reset();
 
+    
     std::ifstream cart(path, std::ios::binary);
     if (!cart) {
         return false;
@@ -93,12 +91,22 @@ bool Cartridge::load(const char* path) {
    return true;
 }
 
+// Helper functions for cartridge loading
 bool Cartridge::verify(const std::array<uint8_t, 16>& header) {
     return header[0] == 0x4E
         && header[1] == 0x45
         && header[2] == 0x53
         && header[3] == 0x1A;
 }
+
+void Cartridge::reset() {
+    prgBanks = 0;
+    chrBanks = 0;
+    mapperId = 0;
+    prgData.clear();
+    chrData.clear();
+}
+
 
 bool Cartridge::cpuRead(uint16_t address, uint8_t& data) const {
     if(address < CPU_PRG_ROM_START || address > CPU_PRG_ROM_END) {

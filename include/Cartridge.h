@@ -21,5 +21,6 @@ class Cartridge {
         std::vector<uint8_t> prgData{};
         std::vector<uint8_t> chrData{};
 
-        bool verify(const std::array<uint8_t, 16>& header);      
+        bool verify(const std::array<uint8_t, 16>& header); 
+        void reset();   
 };
