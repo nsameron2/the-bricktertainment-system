@@ -1,8 +1,26 @@
+#include "Bus.h"
+#include "Cartridge.h"
+
+#include <array>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include "Bus.h"
+#include <filesystem>
+#include <fstream>
+#include <vector>
 
 namespace {
+
+constexpr size_t INES_HEADER_SIZE = 16;
+constexpr size_t PRG_BANK_SIZE = 16 * 1024;
+constexpr size_t CHR_BANK_SIZE = 8 * 1024;
+
+void expectTrue(bool value, const char* message) {
+    if(!value) {
+        std::fprintf(stderr, "FAIL: %s\n", message);
+        std::exit(EXIT_FAILURE);
+    }
+}
 
 void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
     if(actual != expected) {
@@ -13,6 +31,34 @@ void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
                      actual);
         std::exit(EXIT_FAILURE);
     }
+}
+
+std::array<uint8_t, INES_HEADER_SIZE> makeHeader(uint8_t prgBanks,
+                                                 uint8_t chrBanks) {
+    std::array<uint8_t, INES_HEADER_SIZE> header{};
+    header[0] = 'N';
+    header[1] = 'E';
+    header[2] = 'S';
+    header[3] = 0x1A;
+    header[4] = prgBanks;
+    header[5] = chrBanks;
+    return header;
+}
+
+void writeBytes(std::ofstream& file, const std::vector<uint8_t>& bytes) {
+    file.write(reinterpret_cast<const char*>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
+}
+
+void writeRomData(const std::filesystem::path& path,
+                  const std::array<uint8_t, INES_HEADER_SIZE>& header,
+                  const std::vector<uint8_t>& prgData,
+                  const std::vector<uint8_t>& chrData) {
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(header.data()),
+               static_cast<std::streamsize>(header.size()));
+    writeBytes(file, prgData);
+    writeBytes(file, chrData);
 }
 
 }
@@ -41,6 +87,32 @@ int main() {
     bus.write(0x2000, 0x55);
     expectEqual(bus.read(0x2000), 0x00, "unmapped address 0x2000 reads as 0x00");
     expectEqual(bus.read(0x0000), 0x11, "unmapped write at 0x2000 does not alter RAM");
+
+    expectEqual(bus.read(0x8000), 0x00, "cartridge address 0x8000 reads as 0x00 without cartridge");
+
+    const auto cartridgePath = std::filesystem::temp_directory_path() / "brick_test_bus_cartridge.nes";
+    std::vector<uint8_t> prgData(PRG_BANK_SIZE, 0xEA);
+    prgData[0x0000] = 0xA9;
+    prgData[0x3FFF] = 0x60;
+
+    writeRomData(cartridgePath,
+                 makeHeader(1, 1),
+                 prgData,
+                 std::vector<uint8_t>(CHR_BANK_SIZE, 0x00));
+
+    Cartridge cartridge;
+    expectTrue(cartridge.load(cartridgePath.string().c_str()),
+               "test cartridge loads successfully");
+
+    bus.insertCartridge(&cartridge);
+    expectEqual(bus.read(0x8000), 0xA9, "bus routes 0x8000 read to cartridge PRG ROM");
+    expectEqual(bus.read(0xC000), 0xA9, "bus routes 0xC000 read to mirrored 16KB PRG ROM");
+    expectEqual(bus.read(0xFFFF), 0x60, "bus routes 0xFFFF read to mirrored PRG ROM end");
+
+    bus.write(0x8000, 0x00);
+    expectEqual(bus.read(0x8000), 0xA9, "bus cartridge write does not alter Mapper 0 PRG ROM");
+
+    std::filesystem::remove(cartridgePath);
 
     std::printf("test_bus passed\n");
 
