@@ -14,6 +14,11 @@ public:
         bus = b;
     }
 
+    // Main console functions
+    void reset();
+    void powerOn();
+
+    void clock();
 
 private:
     // --- REGISTERS ---
@@ -43,11 +48,8 @@ private:
     void setFlag(StatusFlag flag, bool value);
     bool getFlag(StatusFlag flag) const;
 
-    // Main console functions
-    void reset();
-    void powerOn();
 
-    void clock();
+    // -- OPCODE STUFF -- 
     void executeOpcode(uint8_t opcode);
 
     enum class AddressMode : uint8_t {
