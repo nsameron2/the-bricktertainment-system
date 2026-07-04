@@ -45,3 +45,8 @@ add_executable(test_cpu tests/test_cpu.cpp src/CPU.cpp)
 target_include_directories(test_cpu PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
 add_test(NAME test_cpu COMMAND test_cpu)
+
+add_executable(test_cartridge tests/test_cartridge.cpp src/Cartridge.cpp)
+target_include_directories(test_cartridge PRIVATE "${CMAKE_SOURCE_DIR}/include")
+
+add_test(NAME test_cartridge COMMAND test_cartridge)
