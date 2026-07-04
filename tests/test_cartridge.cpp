@@ -29,6 +29,17 @@ void expectFalse(bool value, const char* message) {
     }
 }
 
+void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
+    if (actual != expected) {
+        std::fprintf(stderr,
+                     "FAIL: %s (expected 0x%02X, got 0x%02X)\n",
+                     message,
+                     expected,
+                     actual);
+        std::exit(EXIT_FAILURE);
+    }
+}
+
 std::filesystem::path testPath(const char* name) {
     return std::filesystem::temp_directory_path() / name;
 }
@@ -67,6 +78,17 @@ void writeRom(const std::filesystem::path& path,
     writeBytes(file, std::vector<uint8_t>(header[5] * CHR_BANK_SIZE, 0x00));
 }
 
+void writeRomData(const std::filesystem::path& path,
+                  const std::array<uint8_t, INES_HEADER_SIZE>& header,
+                  const std::vector<uint8_t>& prgData,
+                  const std::vector<uint8_t>& chrData) {
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(header.data()),
+               static_cast<std::streamsize>(header.size()));
+    writeBytes(file, prgData);
+    writeBytes(file, chrData);
+}
+
 void writeRawFile(const std::filesystem::path& path,
                   const std::vector<uint8_t>& bytes) {
     std::ofstream file(path, std::ios::binary);
@@ -81,6 +103,9 @@ int main() {
     const auto validChrRomPath = testPath("brick_test_valid_chr_rom.nes");
     const auto trainerPath = testPath("brick_test_trainer.nes");
     const auto chrRamPath = testPath("brick_test_chr_ram.nes");
+    const auto invalidPrgBanksPath = testPath("brick_test_invalid_prg_banks.nes");
+    const auto mapper0_16Path = testPath("brick_test_mapper0_16kb.nes");
+    const auto mapper0_32Path = testPath("brick_test_mapper0_32kb.nes");
     const auto missingPath = testPath("brick_test_missing_file.nes");
     std::filesystem::remove(missingPath);
 
@@ -113,6 +138,27 @@ int main() {
                    "valid cartridge with PRG ROM and CHR ROM returns true");
     }
 
+    {
+        Cartridge cart;
+        uint8_t data = 0x00;
+
+        expectTrue(cart.load(validChrRomPath.string().c_str()),
+                   "valid cartridge loads before failed reload");
+        expectTrue(cart.cpuRead(0x8000, data),
+                   "loaded cartridge handles CPU read before failed reload");
+        expectFalse(cart.load(badMagicPath.string().c_str()),
+                    "failed reload returns false");
+        expectFalse(cart.cpuRead(0x8000, data),
+                    "failed reload clears previous cartridge data");
+    }
+
+    writeRom(invalidPrgBanksPath, makeHeader(3, 1), false);
+    {
+        Cartridge cart;
+        expectFalse(cart.load(invalidPrgBanksPath.string().c_str()),
+                    "Mapper 0 cartridge with invalid PRG bank count returns false");
+    }
+
     writeRom(trainerPath, makeHeader(1, 1, 0x04), true);
     {
         Cartridge cart;
@@ -127,11 +173,76 @@ int main() {
                    "valid cartridge with CHR RAM returns true");
     }
 
+    std::vector<uint8_t> prg16(PRG_BANK_SIZE, 0xEA);
+    prg16[0x0000] = 0x11;
+    prg16[0x3FFF] = 0x22;
+    writeRomData(mapper0_16Path,
+                 makeHeader(1, 1),
+                 prg16,
+                 std::vector<uint8_t>(CHR_BANK_SIZE, 0x00));
+    {
+        Cartridge cart;
+        uint8_t data = 0x00;
+
+        expectTrue(cart.load(mapper0_16Path.string().c_str()),
+                   "valid 16KB Mapper 0 cartridge loads");
+        expectFalse(cart.cpuRead(0x7FFF, data),
+                    "CPU read below 0x8000 is not handled by cartridge");
+        expectTrue(cart.cpuRead(0x8000, data),
+                   "CPU read at 0x8000 is handled by cartridge");
+        expectEqual(data, 0x11, "16KB PRG maps 0x8000 to PRG offset 0x0000");
+        expectTrue(cart.cpuRead(0xBFFF, data),
+                   "CPU read at 0xBFFF is handled by cartridge");
+        expectEqual(data, 0x22, "16KB PRG maps 0xBFFF to PRG offset 0x3FFF");
+        expectTrue(cart.cpuRead(0xC000, data),
+                   "CPU read at 0xC000 is handled by cartridge");
+        expectEqual(data, 0x11, "16KB PRG mirrors 0xC000 to PRG offset 0x0000");
+        expectTrue(cart.cpuRead(0xFFFF, data),
+                   "CPU read at 0xFFFF is handled by cartridge");
+        expectEqual(data, 0x22, "16KB PRG mirrors 0xFFFF to PRG offset 0x3FFF");
+
+        expectTrue(cart.cpuWrite(0x8000, 0x99),
+                   "CPU write to Mapper 0 PRG range is handled");
+        expectTrue(cart.cpuRead(0x8000, data),
+                   "CPU read after Mapper 0 write is handled");
+        expectEqual(data, 0x11, "Mapper 0 PRG write does not modify ROM data");
+    }
+
+    std::vector<uint8_t> prg32(PRG_BANK_SIZE * 2, 0xEA);
+    prg32[0x0000] = 0x31;
+    prg32[0x4000] = 0x42;
+    prg32[0x7FFF] = 0x53;
+    writeRomData(mapper0_32Path,
+                 makeHeader(2, 1),
+                 prg32,
+                 std::vector<uint8_t>(CHR_BANK_SIZE, 0x00));
+    {
+        Cartridge cart;
+        uint8_t data = 0x00;
+
+        expectTrue(cart.load(mapper0_32Path.string().c_str()),
+                   "valid 32KB Mapper 0 cartridge loads");
+        expectTrue(cart.cpuRead(0x8000, data),
+                   "CPU read at 0x8000 is handled by 32KB cartridge");
+        expectEqual(data, 0x31, "32KB PRG maps 0x8000 to PRG offset 0x0000");
+        expectTrue(cart.cpuRead(0xC000, data),
+                   "CPU read at 0xC000 is handled by 32KB cartridge");
+        expectEqual(data, 0x42, "32KB PRG maps 0xC000 to PRG offset 0x4000");
+        expectTrue(cart.cpuRead(0xFFFF, data),
+                   "CPU read at 0xFFFF is handled by 32KB cartridge");
+        expectEqual(data, 0x53, "32KB PRG maps 0xFFFF to PRG offset 0x7FFF");
+        expectFalse(cart.cpuWrite(0x7FFF, 0x99),
+                    "CPU write below 0x8000 is not handled by cartridge");
+    }
+
     std::filesystem::remove(shortHeaderPath);
     std::filesystem::remove(badMagicPath);
     std::filesystem::remove(validChrRomPath);
     std::filesystem::remove(trainerPath);
     std::filesystem::remove(chrRamPath);
+    std::filesystem::remove(invalidPrgBanksPath);
+    std::filesystem::remove(mapper0_16Path);
+    std::filesystem::remove(mapper0_32Path);
 
     std::printf("test_cartridge passed\n");
 
