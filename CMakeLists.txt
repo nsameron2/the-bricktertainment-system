@@ -36,12 +36,12 @@ endif()
 # Tests
 enable_testing()
 
-add_executable(test_bus tests/test_bus.cpp)
+add_executable(test_bus tests/test_bus.cpp src/Bus.cpp)
 target_include_directories(test_bus PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
 add_test(NAME test_bus COMMAND test_bus)
 
-add_executable(test_cpu tests/test_cpu.cpp src/CPU.cpp)
+add_executable(test_cpu tests/test_cpu.cpp src/CPU.cpp src/Bus.cpp)
 target_include_directories(test_cpu PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
 add_test(NAME test_cpu COMMAND test_cpu)
