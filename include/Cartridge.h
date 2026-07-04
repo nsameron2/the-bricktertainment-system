@@ -1,14 +1,18 @@
 #pragma once
 
 #include <array>
+#include <vector>
 #include <cstdint>
 
 
 class Cartridge {
     public:
-        // Verify, load function
-        void load(const char* path);
+        bool load(const char* path);
 
     private:
-        bool verify(const std::array<uint8_t, 16>& header);
+        // Loaded cartridge data
+        std::vector<uint8_t> prgData{};
+        std::vector<uint8_t> chrData{};
+
+        bool verify(const std::array<uint8_t, 16>& header);      
 };
