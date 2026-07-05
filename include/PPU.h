@@ -4,15 +4,22 @@
 #include <array>
 
 
+class PPUBus;
+
 class PPU {
     public:
+        void connectBus(PPUBus* b) {
+            bus = b;
+        }
 
     private:
-        // PPU memory
-        std::array<uint8_t, 2048> nametableRam{};
-        std::array<uint8_t, 32> paletteRam{};
+        // Object Attribute Memory, internal to the PPU, not in bus
         std::array<uint8_t, 256> oam{};
 
+        PPUBus* bus = nullptr;
+
+
+        // Reads and writes that go through the (ppu)bus
         void writeVram(uint16_t address, uint8_t data);
         uint8_t readVram(uint16_t address) const;
 };

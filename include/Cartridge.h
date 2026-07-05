@@ -10,6 +10,8 @@ class Cartridge {
         bool load(const char* path);
         bool cpuRead(uint16_t address, uint8_t& data) const;
         bool cpuWrite(uint16_t address, uint8_t data);
+        bool ppuRead(uint16_t address, uint8_t& data) const;
+        bool ppuWrite(uint16_t address, uint8_t data);
 
     private:
         // Cartridge metadata from the iNES header. Store for later use

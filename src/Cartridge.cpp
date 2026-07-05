@@ -10,6 +10,8 @@ constexpr uint16_t CPU_PRG_ROM_START = 0x8000;
 constexpr uint16_t CPU_PRG_ROM_END = 0xFFFF;
 constexpr uint16_t PRG_ROM_16KB_MASK = 0x3FFF;
 constexpr uint16_t PRG_ROM_32KB_MASK = 0x7FFF;
+constexpr uint16_t PPU_CHR_END = 0x1FFF;
+constexpr uint16_t CHR_8KB_MASK = 0x1FFF;
 
 }
 
@@ -144,4 +146,34 @@ bool Cartridge::cpuWrite(uint16_t address, uint8_t data) {
 
     // Mapper 0 PRG ROM is read-only. The address belongs to the cartridge, but the write does not modify cartridge data.
     return prgBanks == 1 || prgBanks == 2;
+}
+
+bool Cartridge::ppuRead(uint16_t address, uint8_t& data) const {
+    if(address > PPU_CHR_END) {
+        return false;
+    }
+
+    if(mapperId != 0 || chrData.empty()) {
+        return false;
+    }
+
+    data = chrData[address & CHR_8KB_MASK];
+    return true;
+}
+
+bool Cartridge::ppuWrite(uint16_t address, uint8_t data) {
+    if(address > PPU_CHR_END) {
+        return false;
+    }
+
+    if(mapperId != 0 || chrData.empty()) {
+        return false;
+    }
+
+    if(chrBanks == 0) {
+        chrData[address & CHR_8KB_MASK] = data;
+    }
+
+    // CHR ROM and CHR RAM both occupy this PPU range; only CHR RAM is writable.
+    return true;
 }
