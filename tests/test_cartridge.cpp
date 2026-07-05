@@ -169,17 +169,29 @@ int main() {
     writeRom(chrRamPath, makeHeader(1, 0), false);
     {
         Cartridge cart;
+        uint8_t data = 0x00;
+
         expectTrue(cart.load(chrRamPath.string().c_str()),
                    "valid cartridge with CHR RAM returns true");
+        expectTrue(cart.ppuRead(0x0000, data),
+                   "PPU read from CHR RAM range is handled");
+        expectEqual(data, 0x00, "new CHR RAM reads as 0x00");
+        expectTrue(cart.ppuWrite(0x0000, 0x77),
+                   "PPU write to CHR RAM range is handled");
+        expectTrue(cart.ppuRead(0x0000, data),
+                   "PPU read after CHR RAM write is handled");
+        expectEqual(data, 0x77, "PPU write modifies CHR RAM");
+        expectFalse(cart.ppuRead(0x2000, data),
+                    "PPU read outside CHR range is not handled by cartridge");
     }
 
     std::vector<uint8_t> prg16(PRG_BANK_SIZE, 0xEA);
     prg16[0x0000] = 0x11;
     prg16[0x3FFF] = 0x22;
-    writeRomData(mapper0_16Path,
-                 makeHeader(1, 1),
-                 prg16,
-                 std::vector<uint8_t>(CHR_BANK_SIZE, 0x00));
+    std::vector<uint8_t> chrRom(CHR_BANK_SIZE, 0x00);
+    chrRom[0x0000] = 0xA1;
+    chrRom[0x1FFF] = 0xB2;
+    writeRomData(mapper0_16Path, makeHeader(1, 1), prg16, chrRom);
     {
         Cartridge cart;
         uint8_t data = 0x00;
@@ -206,6 +218,18 @@ int main() {
         expectTrue(cart.cpuRead(0x8000, data),
                    "CPU read after Mapper 0 write is handled");
         expectEqual(data, 0x11, "Mapper 0 PRG write does not modify ROM data");
+
+        expectTrue(cart.ppuRead(0x0000, data),
+                   "PPU read at 0x0000 is handled by CHR ROM");
+        expectEqual(data, 0xA1, "PPU read maps 0x0000 to CHR offset 0x0000");
+        expectTrue(cart.ppuRead(0x1FFF, data),
+                   "PPU read at 0x1FFF is handled by CHR ROM");
+        expectEqual(data, 0xB2, "PPU read maps 0x1FFF to CHR offset 0x1FFF");
+        expectTrue(cart.ppuWrite(0x0000, 0x99),
+                   "PPU write to CHR ROM range is handled");
+        expectTrue(cart.ppuRead(0x0000, data),
+                   "PPU read after CHR ROM write is handled");
+        expectEqual(data, 0xA1, "PPU write does not modify CHR ROM");
     }
 
     std::vector<uint8_t> prg32(PRG_BANK_SIZE * 2, 0xEA);
