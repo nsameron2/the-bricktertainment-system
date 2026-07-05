@@ -1,4 +1,4 @@
-#include "Bus.h"
+#include "CPUBus.h"
 #include "Cartridge.h"
 
 #include <array>
@@ -64,7 +64,7 @@ void writeRomData(const std::filesystem::path& path,
 }
 
 int main() {
-    Bus bus;
+    CPUBus bus;
 
     // MIRRORING TEST
     expectEqual(bus.read(0x0000), 0x00, "RAM initializes to 0x00 at 0x0000");
@@ -114,7 +114,7 @@ int main() {
 
     std::filesystem::remove(cartridgePath);
 
-    std::printf("test_bus passed\n");
+    std::printf("test_cpu_bus passed\n");
 
     return 0;
 }

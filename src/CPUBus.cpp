@@ -1,9 +1,9 @@
-#include "Bus.h"
+#include "CPUBus.h"
 #include "Cartridge.h"
 
 
-// Functions for writing or reading into memory. Delegate memory or cartridge writing/reading through the given address
-void Bus::write(uint16_t address, uint8_t data) {
+// Functions for writing or reading into CPU-visible memory.
+void CPUBus::write(uint16_t address, uint8_t data) {
     if(address <= INTERNAL_RAM_MIRROR_END) {
         memory[address & INTERNAL_RAM_MASK] = data;
         return;
@@ -14,12 +14,12 @@ void Bus::write(uint16_t address, uint8_t data) {
     }
 }
 
-uint8_t Bus::read(uint16_t address) const {
+uint8_t CPUBus::read(uint16_t address) const {
     if(address <= INTERNAL_RAM_MIRROR_END) {
         return memory[address & INTERNAL_RAM_MASK];
     }
 
-    // Safety for if there is a cartrdige read error
+    // Safety for if there is a cartridge read error.
     uint8_t data = 0x00;
     if(cartridge && cartridge->cpuRead(address, data)) {
         return data;
@@ -31,6 +31,6 @@ uint8_t Bus::read(uint16_t address) const {
 
 
 // Cartridge
-void Bus::insertCartridge(Cartridge* cart) {
+void CPUBus::insertCartridge(Cartridge* cart) {
     cartridge = cart;
 }

@@ -7,7 +7,7 @@
 #include "CPU.h"
 #undef private
 
-#include "Bus.h"
+#include "CPUBus.h"
 
 namespace {
 
@@ -55,7 +55,7 @@ void expectFlag(const CPU& cpu, uint8_t flag, bool expected, const char* message
     }
 }
 
-void loadProgram(Bus& bus, std::initializer_list<uint8_t> bytes, uint16_t start = 0x0000) {
+void loadProgram(CPUBus& bus, std::initializer_list<uint8_t> bytes, uint16_t start = 0x0000) {
     uint16_t address = start;
     for(uint8_t byte : bytes) {
         bus.write(address, byte);
@@ -73,14 +73,14 @@ uint8_t runInstruction(CPU& cpu) {
     return elapsedCycles;
 }
 
-void connectAndPowerOn(CPU& cpu, Bus& bus) {
+void connectAndPowerOn(CPU& cpu, CPUBus& bus) {
     cpu.connectBus(&bus);
     cpu.powerOn();
 }
 
 void testPowerOnInitializesStatus() {
     CPU cpu;
-    Bus bus;
+    CPUBus bus;
     connectAndPowerOn(cpu, bus);
 
     expectEqual8(cpu.A, 0x00, "powerOn clears A");
@@ -99,7 +99,7 @@ void testPowerOnInitializesStatus() {
 
 void testLoadAddStoreAndFlags() {
     CPU cpu;
-    Bus bus;
+    CPUBus bus;
     connectAndPowerOn(cpu, bus);
     loadProgram(bus, {
         0xA9, 0x7F,       // LDA #0x7F
@@ -124,7 +124,7 @@ void testLoadAddStoreAndFlags() {
 
 void testIndexedAndIndirectAddressing() {
     CPU cpu;
-    Bus bus;
+    CPUBus bus;
     connectAndPowerOn(cpu, bus);
     bus.write(0x007F, 0xAA);
     bus.write(0x0020, 0xFF);
@@ -155,7 +155,7 @@ void testIndexedAndIndirectAddressing() {
 
 void testBranchCycleCounts() {
     CPU cpu;
-    Bus bus;
+    CPUBus bus;
     connectAndPowerOn(cpu, bus);
     loadProgram(bus, {
         0xA9, 0x00,       // LDA #0x00
@@ -174,7 +174,7 @@ void testBranchCycleCounts() {
     expectEqual8(cpu.A, 0x42, "BEQ skips over untaken instruction bytes");
 
     CPU pageCrossCpu;
-    Bus pageCrossBus;
+    CPUBus pageCrossBus;
     connectAndPowerOn(pageCrossCpu, pageCrossBus);
     pageCrossCpu.PC = 0x00FC;
     pageCrossCpu.P |= FLAG_Z;
@@ -188,7 +188,7 @@ void testBranchCycleCounts() {
 
 void testStackAndSubroutineOpcodes() {
     CPU cpu;
-    Bus bus;
+    CPUBus bus;
     connectAndPowerOn(cpu, bus);
     loadProgram(bus, {
         0x20, 0x06, 0x00, // JSR 0x0006
@@ -217,7 +217,7 @@ void testStackAndSubroutineOpcodes() {
 
 void testShiftRotateAndMemoryOpcodes() {
     CPU cpu;
-    Bus bus;
+    CPUBus bus;
     connectAndPowerOn(cpu, bus);
     loadProgram(bus, {
         0xA9, 0x81,       // LDA #0x81
@@ -259,7 +259,7 @@ void testShiftRotateAndMemoryOpcodes() {
 
 void testCompareBitAndSbcOpcodes() {
     CPU cpu;
-    Bus bus;
+    CPUBus bus;
     connectAndPowerOn(cpu, bus);
     bus.write(0x00A0, 0xC0);
     loadProgram(bus, {

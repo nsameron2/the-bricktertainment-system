@@ -4,13 +4,13 @@
 
 
 // All we need for pointers
-class Bus;
+class CPUBus;
 
 // 6502
 class CPU {
 public:
     // We need this public because it will be accessed from main.cpp.
-    void connectBus(Bus* b) {
+    void connectBus(CPUBus* b) {
         bus = b;
     }
 
@@ -98,7 +98,7 @@ private:
 
 
     // --- BUS ---
-    Bus* bus = nullptr;
+    CPUBus* bus = nullptr;
 
 
     // -- BUS HELPER FUNCTIONS --

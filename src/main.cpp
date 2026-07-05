@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <iostream>
 
-#include "Bus.h"
+#include "CPUBus.h"
 #include "CPU.h"
 #include "Cartridge.h"
 
@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
 
 
     Cartridge cart;
-    Bus bus;
+    CPUBus bus;
     CPU cpu;
 
     if(!cart.load(argv[1])) {
