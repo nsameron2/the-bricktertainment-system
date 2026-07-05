@@ -1,5 +1,7 @@
 #include "CPUBus.h"
 #include "Cartridge.h"
+#include "PPU.h"
+#include "PPUBus.h"
 
 #include <array>
 #include <cstdint>
@@ -85,8 +87,26 @@ int main() {
     expectEqual(bus.read(0x07FF), 0x7E, "0x1FFF mirrors 0x07FF");
 
     bus.write(0x2000, 0x55);
-    expectEqual(bus.read(0x2000), 0x00, "unmapped address 0x2000 reads as 0x00");
-    expectEqual(bus.read(0x0000), 0x11, "unmapped write at 0x2000 does not alter RAM");
+    expectEqual(bus.read(0x2000), 0x00, "PPU register address reads as 0x00 without connected PPU");
+    expectEqual(bus.read(0x0000), 0x11, "PPU register write without connected PPU does not alter RAM");
+
+    PPU ppu;
+    PPUBus ppuBus;
+    ppu.connectBus(&ppuBus);
+    bus.connectPPU(&ppu);
+
+    bus.write(0x2006, 0x23);
+    bus.write(0x2006, 0xC0);
+    bus.write(0x2007, 0x66);
+    expectEqual(ppuBus.read(0x23C0), 0x66, "CPUBus routes PPUADDR/PPUDATA writes to PPU registers");
+
+    bus.write(0x2008, 0x04);
+    bus.write(0x2006, 0x24);
+    bus.write(0x2006, 0x00);
+    bus.write(0x2007, 0x77);
+    bus.write(0x2007, 0x88);
+    expectEqual(ppuBus.read(0x2400), 0x77, "CPUBus mirrors 0x2008 to PPUCTRL");
+    expectEqual(ppuBus.read(0x2420), 0x88, "mirrored PPUCTRL write changes PPUDATA increment");
 
     expectEqual(bus.read(0x8000), 0x00, "cartridge address 0x8000 reads as 0x00 without cartridge");
 
