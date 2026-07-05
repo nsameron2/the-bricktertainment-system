@@ -2,11 +2,27 @@
 #include "Cartridge.h"
 #include "PPU.h"
 
+namespace {
+
+constexpr uint16_t PPU_REGISTER_START = 0x2000;
+constexpr uint16_t PPU_REGISTER_MIRROR_END = 0x3FFF;
+constexpr uint16_t PPU_REGISTER_MASK = 0x0007;
+
+}
+
 
 // Functions for writing or reading into CPU-visible memory.
 void CPUBus::write(uint16_t address, uint8_t data) {
     if(address <= INTERNAL_RAM_MIRROR_END) {
         memory[address & INTERNAL_RAM_MASK] = data;
+        return;
+    }
+
+    if(address >= PPU_REGISTER_START && address <= PPU_REGISTER_MIRROR_END) {
+        if(ppu) {
+            ppu->writeRegister(address & PPU_REGISTER_MASK, data);
+        }
+
         return;
     }
 
@@ -18,6 +34,14 @@ void CPUBus::write(uint16_t address, uint8_t data) {
 uint8_t CPUBus::read(uint16_t address) const {
     if(address <= INTERNAL_RAM_MIRROR_END) {
         return memory[address & INTERNAL_RAM_MASK];
+    }
+
+    if(address >= PPU_REGISTER_START && address <= PPU_REGISTER_MIRROR_END) {
+        if(ppu) {
+            return ppu->readRegister(address & PPU_REGISTER_MASK);
+        }
+
+        return 0x00;
     }
 
     // Safety for if there is a cartridge read error.
