@@ -5,6 +5,8 @@
 #include "CPUBus.h"
 #include "CPU.h"
 #include "Cartridge.h"
+#include "PPU.h"
+#include "PPUBus.h"
 
 
 int main(int argc, char* argv[]) {
@@ -16,7 +18,9 @@ int main(int argc, char* argv[]) {
 
     Cartridge cart;
     CPUBus bus;
+    PPUBus ppuBus;
     CPU cpu;
+    PPU ppu;
 
     if(!cart.load(argv[1])) {
         std::cerr << "Failed to load ROM: " << argv[1] << '\n';
@@ -24,6 +28,9 @@ int main(int argc, char* argv[]) {
     }
 
     bus.insertCartridge(&cart);
+    bus.connectPPU(&ppu);
+    ppuBus.insertCartridge(&cart);
+    ppu.connectBus(&ppuBus);
     cpu.connectBus(&bus);
     cpu.powerOn();
 
