@@ -1,5 +1,6 @@
 #include "CPUBus.h"
 #include "Cartridge.h"
+#include "PPU.h"
 
 
 // Functions for writing or reading into CPU-visible memory.
@@ -30,7 +31,11 @@ uint8_t CPUBus::read(uint16_t address) const {
 }
 
 
-// Cartridge
+// Component connections
 void CPUBus::insertCartridge(Cartridge* cart) {
     cartridge = cart;
+}
+
+void CPUBus::connectPPU(PPU* ppup) {
+    ppu = ppup;
 }
