@@ -55,3 +55,8 @@ add_executable(test_ppu_bus tests/test_ppu_bus.cpp src/PPUBus.cpp src/Cartridge.
 target_include_directories(test_ppu_bus PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
 add_test(NAME test_ppu_bus COMMAND test_ppu_bus)
+
+add_executable(test_ppu tests/test_ppu.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
+target_include_directories(test_ppu PRIVATE "${CMAKE_SOURCE_DIR}/include")
+
+add_test(NAME test_ppu COMMAND test_ppu)
