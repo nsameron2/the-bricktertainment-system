@@ -20,11 +20,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-file(GLOB_RECURSE SOURCES "${CMAKE_SOURCE_DIR}/src/*.cpp")
+find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3)
+
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
 
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /W4)
