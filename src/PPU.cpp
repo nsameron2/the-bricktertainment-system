@@ -7,6 +7,12 @@ constexpr uint16_t PPU_REGISTER_MASK = 0x0007;
 constexpr uint16_t PPU_ADDRESS_MASK = 0x3FFF;
 constexpr uint16_t PALETTE_START = 0x3F00;
 
+constexpr int16_t PPU_CYCLES_PER_SCANLINE = 341;
+constexpr int16_t PPU_SCANLINES_PER_FRAME = 262;
+constexpr int16_t PPU_VBLANK_SCANLINE = 241;
+constexpr int16_t PPU_PRE_RENDER_SCANLINE = 261;
+constexpr int16_t PPU_STATUS_EVENT_CYCLE = 1;
+
 constexpr uint8_t PPUCTRL_VRAM_INCREMENT = 1 << 2;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 
@@ -15,6 +21,29 @@ constexpr uint16_t COARSE_Y_SCROLL_MASK = 0x03E0;
 constexpr uint16_t NAMETABLE_SELECT_MASK = 0x0C00;
 constexpr uint16_t FINE_Y_SCROLL_MASK = 0x7000;
 
+}
+
+void PPU::clock() {
+    if (scanline == PPU_VBLANK_SCANLINE && cycle == PPU_STATUS_EVENT_CYCLE) {
+        status |= PPUSTATUS_VBLANK;
+    }
+
+    if (scanline == PPU_PRE_RENDER_SCANLINE && cycle == PPU_STATUS_EVENT_CYCLE) {
+        status &= ~PPUSTATUS_VBLANK;
+        frameComplete = false;
+    }
+
+    cycle++;
+
+    if (cycle >= PPU_CYCLES_PER_SCANLINE) {
+        cycle = 0;
+        scanline++;
+
+        if (scanline >= PPU_SCANLINES_PER_FRAME) {
+            scanline = 0;
+            frameComplete = true;
+        }
+    }
 }
 
 uint8_t PPU::readRegister(uint16_t address) {

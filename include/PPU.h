@@ -14,6 +14,7 @@ class PPU {
 
         uint8_t readRegister(uint16_t address);
         void writeRegister(uint16_t address, uint8_t data);
+        void clock();
 
     private:
         // Object Attribute Memory, internal to the PPU, not in bus
@@ -33,6 +34,11 @@ class PPU {
         uint8_t fineX = 0x00;
         bool writeLatch = false;
         uint8_t dataBuffer = 0x00;
+
+        // PPU clock timing states
+        int16_t scanline = 0;
+        int16_t cycle = 0;
+        bool frameComplete = false;
 
         uint16_t vramIncrement() const;
 

@@ -38,6 +38,9 @@ int main(int argc, char* argv[]) {
 
     // For now, runs until interrupted
     while(true) {
+        ppu.clock();
+        ppu.clock();
+        ppu.clock();
         cpu.clock();
     }
 

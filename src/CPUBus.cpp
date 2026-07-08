@@ -4,6 +4,8 @@
 
 namespace {
 
+constexpr uint16_t INTERNAL_RAM_MASK = 0x07FF;
+constexpr uint16_t INTERNAL_RAM_MIRROR_END = 0x1FFF;
 constexpr uint16_t PPU_REGISTER_START = 0x2000;
 constexpr uint16_t PPU_REGISTER_MIRROR_END = 0x3FFF;
 constexpr uint16_t PPU_REGISTER_MASK = 0x0007;

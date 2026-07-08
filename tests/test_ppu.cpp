@@ -1,11 +1,22 @@
-#include "PPU.h"
-#include "PPUBus.h"
-
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 
+#define private public
+#include "PPU.h"
+#undef private
+
+#include "PPUBus.h"
+
 namespace {
+
+constexpr int16_t PPU_CYCLES_PER_SCANLINE = 341;
+constexpr int16_t PPU_SCANLINES_PER_FRAME = 262;
+constexpr int16_t PPU_VBLANK_SCANLINE = 241;
+constexpr int16_t PPU_PRE_RENDER_SCANLINE = 261;
+constexpr int16_t PPU_STATUS_EVENT_CYCLE = 1;
+constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 
 void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
     if (actual != expected) {
@@ -16,6 +27,41 @@ void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
                      actual);
         std::exit(EXIT_FAILURE);
     }
+}
+
+void expectEqual16(int16_t actual, int16_t expected, const char* message) {
+    if (actual != expected) {
+        std::fprintf(stderr,
+                     "FAIL: %s (expected 0x%04X, got 0x%04X)\n",
+                     message,
+                     static_cast<uint16_t>(expected),
+                     static_cast<uint16_t>(actual));
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+void expectTrue(bool value, const char* message) {
+    if (!value) {
+        std::fprintf(stderr, "FAIL: %s\n", message);
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+void expectFalse(bool value, const char* message) {
+    if (value) {
+        std::fprintf(stderr, "FAIL: %s\n", message);
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+void runClocks(PPU& ppu, int clocks) {
+    for (int i = 0; i < clocks; i++) {
+        ppu.clock();
+    }
+}
+
+int clocksToProcessDot(int16_t scanline, int16_t cycle) {
+    return (scanline * PPU_CYCLES_PER_SCANLINE) + cycle + 1;
 }
 
 }
@@ -97,6 +143,40 @@ int main() {
         ppu.writeRegister(0x2006, 0x00);
 
         expectEqual(ppu.readRegister(0x2007), 0x0F, "PPUDATA palette read bypasses the read buffer");
+    }
+
+    {
+        PPU ppu;
+
+        runClocks(ppu, clocksToProcessDot(PPU_VBLANK_SCANLINE, PPU_STATUS_EVENT_CYCLE));
+        expectTrue((ppu.status & PPUSTATUS_VBLANK) != 0x00, "PPU clock sets VBlank at scanline 0x00F1 cycle 0x0001");
+        expectEqual(ppu.readRegister(0x2002) & PPUSTATUS_VBLANK,
+                    PPUSTATUS_VBLANK,
+                    "PPUSTATUS read returns VBlank set");
+        expectFalse((ppu.status & PPUSTATUS_VBLANK) != 0x00, "PPUSTATUS read clears VBlank");
+    }
+
+    {
+        PPU ppu;
+
+        const int vblankClocks = clocksToProcessDot(PPU_VBLANK_SCANLINE, PPU_STATUS_EVENT_CYCLE);
+        const int preRenderClocks = clocksToProcessDot(PPU_PRE_RENDER_SCANLINE, PPU_STATUS_EVENT_CYCLE);
+
+        runClocks(ppu, vblankClocks);
+        expectTrue((ppu.status & PPUSTATUS_VBLANK) != 0x00, "VBlank is set before pre-render scanline");
+
+        runClocks(ppu, preRenderClocks - vblankClocks);
+        expectFalse((ppu.status & PPUSTATUS_VBLANK) != 0x00, "pre-render scanline clears VBlank");
+    }
+
+    {
+        PPU ppu;
+
+        runClocks(ppu, PPU_CYCLES_PER_SCANLINE * PPU_SCANLINES_PER_FRAME);
+
+        expectTrue(ppu.frameComplete, "PPU clock marks frame complete after one full frame");
+        expectEqual16(ppu.scanline, 0x0000, "PPU scanline wraps to 0x0000 after one full frame");
+        expectEqual16(ppu.cycle, 0x0000, "PPU cycle wraps to 0x0000 after one full frame");
     }
 
     std::printf("test_ppu passed\n");
