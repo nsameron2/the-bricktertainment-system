@@ -15,6 +15,9 @@ class PPU {
         uint8_t readRegister(uint16_t address);
         void writeRegister(uint16_t address, uint8_t data);
         void clock();
+        const std::array<uint32_t, 256 * 240>& getFramebuffer() const;
+        bool isFrameComplete() const;
+        void clearFrameComplete();
 
     private:
         // Object Attribute Memory, internal to the PPU, not in bus
@@ -40,9 +43,15 @@ class PPU {
         int16_t cycle = 0;
         bool frameComplete = false;
 
+        // PPU rendering
+        std::array<uint32_t, 256 * 240> framebuffer{};
+
+
         uint16_t vramIncrement() const;
 
         // Reads and writes that go through the (ppu)bus
         void writeVram(uint16_t address, uint8_t data);
         uint8_t readVram(uint16_t address) const;
+        uint8_t getBackgroundPixel(uint16_t x, uint16_t y) const;
+        uint32_t nesColorToRgb(uint8_t colorIndex) const;
 };

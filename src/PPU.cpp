@@ -7,13 +7,27 @@ constexpr uint16_t PPU_REGISTER_MASK = 0x0007;
 constexpr uint16_t PPU_ADDRESS_MASK = 0x3FFF;
 constexpr uint16_t PALETTE_START = 0x3F00;
 
+constexpr uint16_t SCREEN_WIDTH = 256;
+constexpr uint16_t SCREEN_HEIGHT = 240;
+constexpr uint16_t TILE_SIZE = 8;
+constexpr uint16_t NAMETABLE_BASE = 0x2000;
+constexpr uint16_t ATTRIBUTE_TABLE_BASE = 0x23C0;
+constexpr uint16_t NAMETABLE_ROW_TILES = 32;
+constexpr uint16_t ATTRIBUTE_TABLE_ROW_BYTES = 8;
+constexpr uint16_t BYTES_PER_PATTERN_TILE = 16;
+constexpr uint16_t PATTERN_TILE_HIGH_PLANE_OFFSET = 8;
+constexpr uint8_t NES_PALETTE_INDEX_MASK = 0x3F;
+
 constexpr int16_t PPU_CYCLES_PER_SCANLINE = 341;
 constexpr int16_t PPU_SCANLINES_PER_FRAME = 262;
 constexpr int16_t PPU_VBLANK_SCANLINE = 241;
 constexpr int16_t PPU_PRE_RENDER_SCANLINE = 261;
 constexpr int16_t PPU_STATUS_EVENT_CYCLE = 1;
+constexpr int16_t PPU_VISIBLE_CYCLE_START = 1;
+constexpr int16_t PPU_VISIBLE_CYCLE_END = 256;
 
 constexpr uint8_t PPUCTRL_VRAM_INCREMENT = 1 << 2;
+constexpr uint8_t PPUCTRL_BACKGROUND_PATTERN_TABLE = 1 << 4;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 
 constexpr uint16_t COARSE_X_SCROLL_MASK = 0x001F;
@@ -21,9 +35,38 @@ constexpr uint16_t COARSE_Y_SCROLL_MASK = 0x03E0;
 constexpr uint16_t NAMETABLE_SELECT_MASK = 0x0C00;
 constexpr uint16_t FINE_Y_SCROLL_MASK = 0x7000;
 
+constexpr std::array<uint32_t, 64> NES_PALETTE = {
+    0xFF545454, 0xFF001E74, 0xFF081090, 0xFF300088,
+    0xFF440064, 0xFF5C0030, 0xFF540400, 0xFF3C1800,
+    0xFF202A00, 0xFF083A00, 0xFF004000, 0xFF003C00,
+    0xFF00323C, 0xFF000000, 0xFF000000, 0xFF000000,
+
+    0xFF989698, 0xFF084CC4, 0xFF3032EC, 0xFF5C1EE4,
+    0xFF8814B0, 0xFFA01464, 0xFF982220, 0xFF783C00,
+    0xFF545A00, 0xFF287200, 0xFF087C00, 0xFF007628,
+    0xFF006678, 0xFF000000, 0xFF000000, 0xFF000000,
+
+    0xFFECEEEC, 0xFF4C9AEC, 0xFF787CEC, 0xFFB062EC,
+    0xFFE454EC, 0xFFEC58B4, 0xFFEC6A64, 0xFFD48820,
+    0xFFA0AA00, 0xFF74C400, 0xFF4CD020, 0xFF38CC6C,
+    0xFF38B4CC, 0xFF3C3C3C, 0xFF000000, 0xFF000000,
+
+    0xFFECEEEC, 0xFFA8CCEC, 0xFFBCBCEC, 0xFFD4B2EC,
+    0xFFECAEEC, 0xFFECAED4, 0xFFECB4B0, 0xFFE4C490,
+    0xFFCCD278, 0xFFB4DE78, 0xFFA8E290, 0xFF98E2B4,
+    0xFFA0D6E4, 0xFFA0A2A0, 0xFF000000, 0xFF000000,
+};
+
 }
 
 void PPU::clock() {
+    if (scanline >= 0 && scanline < SCREEN_HEIGHT
+        && cycle >= PPU_VISIBLE_CYCLE_START && cycle <= PPU_VISIBLE_CYCLE_END) {
+        const uint16_t x = static_cast<uint16_t>(cycle - PPU_VISIBLE_CYCLE_START);
+        const uint16_t y = static_cast<uint16_t>(scanline);
+        framebuffer[(y * SCREEN_WIDTH) + x] = nesColorToRgb(getBackgroundPixel(x, y));
+    }
+
     if (scanline == PPU_VBLANK_SCANLINE && cycle == PPU_STATUS_EVENT_CYCLE) {
         status |= PPUSTATUS_VBLANK;
     }
@@ -44,6 +87,18 @@ void PPU::clock() {
             frameComplete = true;
         }
     }
+}
+
+const std::array<uint32_t, 256 * 240>& PPU::getFramebuffer() const {
+    return framebuffer;
+}
+
+bool PPU::isFrameComplete() const {
+    return frameComplete;
+}
+
+void PPU::clearFrameComplete() {
+    frameComplete = false;
 }
 
 uint8_t PPU::readRegister(uint16_t address) {
@@ -153,4 +208,48 @@ uint8_t PPU::readVram(uint16_t address) const {
     }
 
     return 0x00;
+}
+
+uint8_t PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
+    const uint16_t tileX = x / TILE_SIZE;
+    const uint16_t tileY = y / TILE_SIZE;
+    const uint16_t fineX = x % TILE_SIZE;
+    const uint16_t fineY = y % TILE_SIZE;
+
+    const uint16_t nametableAddress = NAMETABLE_BASE + (tileY * NAMETABLE_ROW_TILES) + tileX;
+    const uint8_t tileId = readVram(nametableAddress);
+
+    const uint16_t patternBase = (control & PPUCTRL_BACKGROUND_PATTERN_TABLE) ? 0x1000 : 0x0000;
+    const uint16_t patternAddress = patternBase
+        + (static_cast<uint16_t>(tileId) * BYTES_PER_PATTERN_TILE)
+        + fineY;
+
+    const uint8_t patternLow = readVram(patternAddress);
+    const uint8_t patternHigh = readVram(patternAddress + PATTERN_TILE_HIGH_PLANE_OFFSET);
+
+    const uint8_t bit = static_cast<uint8_t>(7 - fineX);
+    const uint8_t colorId = static_cast<uint8_t>(
+        (((patternHigh >> bit) & 0x01) << 1)
+        | ((patternLow >> bit) & 0x01));
+
+    const uint16_t attributeAddress = ATTRIBUTE_TABLE_BASE
+        + ((tileY / 4) * ATTRIBUTE_TABLE_ROW_BYTES)
+        + (tileX / 4);
+    const uint8_t attributeByte = readVram(attributeAddress);
+
+    const uint8_t quadrantX = static_cast<uint8_t>((tileX % 4) / 2);
+    const uint8_t quadrantY = static_cast<uint8_t>((tileY % 4) / 2);
+    const uint8_t attributeShift = static_cast<uint8_t>((quadrantY * 4) + (quadrantX * 2));
+    const uint8_t paletteId = static_cast<uint8_t>((attributeByte >> attributeShift) & 0x03);
+
+    uint16_t paletteAddress = PALETTE_START + (static_cast<uint16_t>(paletteId) * 4) + colorId;
+    if (colorId == 0x00) {
+        paletteAddress = PALETTE_START;
+    }
+
+    return readVram(paletteAddress) & NES_PALETTE_INDEX_MASK;
+}
+
+uint32_t PPU::nesColorToRgb(uint8_t colorIndex) const {
+    return NES_PALETTE[colorIndex & NES_PALETTE_INDEX_MASK];
 }
