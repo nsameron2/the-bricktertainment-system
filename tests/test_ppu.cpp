@@ -8,8 +8,16 @@
 #undef private
 
 #include "PPUBus.h"
+#include "Cartridge.h"
+
+#include <filesystem>
+#include <fstream>
+#include <vector>
 
 namespace {
+
+constexpr size_t INES_HEADER_SIZE = 16;
+constexpr size_t PRG_BANK_SIZE = 16 * 1024;
 
 constexpr int16_t PPU_CYCLES_PER_SCANLINE = 341;
 constexpr int16_t PPU_SCANLINES_PER_FRAME = 262;
@@ -40,6 +48,17 @@ void expectEqual16(int16_t actual, int16_t expected, const char* message) {
     }
 }
 
+void expectEqual32(uint32_t actual, uint32_t expected, const char* message) {
+    if (actual != expected) {
+        std::fprintf(stderr,
+                     "FAIL: %s (expected 0x%08X, got 0x%08X)\n",
+                     message,
+                     expected,
+                     actual);
+        std::exit(EXIT_FAILURE);
+    }
+}
+
 void expectTrue(bool value, const char* message) {
     if (!value) {
         std::fprintf(stderr, "FAIL: %s\n", message);
@@ -62,6 +81,34 @@ void runClocks(PPU& ppu, int clocks) {
 
 int clocksToProcessDot(int16_t scanline, int16_t cycle) {
     return (scanline * PPU_CYCLES_PER_SCANLINE) + cycle + 1;
+}
+
+std::array<uint8_t, INES_HEADER_SIZE> makeHeader(uint8_t prgBanks,
+                                                 uint8_t chrBanks) {
+    std::array<uint8_t, INES_HEADER_SIZE> header{};
+    header[0] = 'N';
+    header[1] = 'E';
+    header[2] = 'S';
+    header[3] = 0x1A;
+    header[4] = prgBanks;
+    header[5] = chrBanks;
+    return header;
+}
+
+void writeBytes(std::ofstream& file, const std::vector<uint8_t>& bytes) {
+    file.write(reinterpret_cast<const char*>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
+}
+
+void writeRomData(const std::filesystem::path& path,
+                  const std::array<uint8_t, INES_HEADER_SIZE>& header,
+                  const std::vector<uint8_t>& prgData,
+                  const std::vector<uint8_t>& chrData) {
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(header.data()),
+               static_cast<std::streamsize>(header.size()));
+    writeBytes(file, prgData);
+    writeBytes(file, chrData);
 }
 
 }
@@ -174,10 +221,53 @@ int main() {
 
         runClocks(ppu, PPU_CYCLES_PER_SCANLINE * PPU_SCANLINES_PER_FRAME);
 
-        expectTrue(ppu.frameComplete, "PPU clock marks frame complete after one full frame");
+        expectTrue(ppu.isFrameComplete(), "PPU clock marks frame complete after one full frame");
         expectEqual16(ppu.scanline, 0x0000, "PPU scanline wraps to 0x0000 after one full frame");
         expectEqual16(ppu.cycle, 0x0000, "PPU cycle wraps to 0x0000 after one full frame");
+
+        ppu.clearFrameComplete();
+        expectFalse(ppu.isFrameComplete(), "clearFrameComplete clears the frame completion flag");
     }
+
+    const auto chrRamPath = std::filesystem::temp_directory_path() / "brick_test_ppu_background_chr_ram.nes";
+    writeRomData(chrRamPath, makeHeader(1, 0), std::vector<uint8_t>(PRG_BANK_SIZE, 0xEA), {});
+    {
+        Cartridge cartridge;
+        PPUBus bus;
+        PPU ppu;
+
+        expectTrue(cartridge.load(chrRamPath.string().c_str()),
+                   "CHR RAM cartridge loads for background pixel test");
+
+        bus.insertCartridge(&cartridge);
+        ppu.connectBus(&bus);
+
+        bus.write(0x2000, 0x02); // Tile index at nametable tile 0x0000.
+        bus.write(0x0020, 0x80); // Tile 0x02, row 0, low plane: left pixel color bit 0 set.
+        bus.write(0x0028, 0x00); // Tile 0x02, row 0, high plane: left pixel color bit 1 clear.
+        bus.write(0x23C0, 0x02); // Top-left attribute quadrant uses background palette 0x02.
+        bus.write(0x3F00, 0x0F); // Universal background color.
+        bus.write(0x3F09, 0x2A); // Palette 0x02, color 0x01.
+
+        expectEqual(ppu.getBackgroundPixel(0x0000, 0x0000),
+                    0x2A,
+                    "background pixel combines nametable, pattern, attribute, and palette data");
+        expectEqual(ppu.getBackgroundPixel(0x0001, 0x0000),
+                    0x0F,
+                    "background color 0 uses universal background palette entry");
+        expectEqual32(ppu.nesColorToRgb(0x2A),
+                      0xFF4CD020,
+                      "NES color index converts to 0xAARRGGBB");
+        expectEqual32(ppu.nesColorToRgb(0x6A),
+                      0xFF4CD020,
+                      "NES color conversion masks color index to 0x00-0x3F");
+
+        runClocks(ppu, 0x0002);
+        expectEqual32(ppu.getFramebuffer()[0x0000],
+                      0xFF4CD020,
+                      "PPU clock writes converted RGB background pixel to framebuffer");
+    }
+    std::filesystem::remove(chrRamPath);
 
     std::printf("test_ppu passed\n");
 
