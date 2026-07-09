@@ -1,5 +1,6 @@
 #include "CPUBus.h"
 #include "Cartridge.h"
+#include "Controller.h"
 #include "PPU.h"
 #include "PPUBus.h"
 
@@ -107,6 +108,45 @@ int main() {
     bus.write(0x2007, 0x88);
     expectEqual(ppuBus.read(0x2400), 0x77, "CPUBus mirrors 0x2008 to PPUCTRL");
     expectEqual(ppuBus.read(0x2420), 0x88, "mirrored PPUCTRL write changes PPUDATA increment");
+
+    expectEqual(bus.read(0x4016), 0x00, "controller 1 read returns 0x00 without connected controller");
+    expectEqual(bus.read(0x4017), 0x00, "controller 2 read returns 0x00 without connected controller");
+
+    Controller controller1;
+    Controller controller2;
+    bus.connectController1(&controller1);
+    bus.connectController2(&controller2);
+
+    controller1.setButton(Controller::Button::A, true);
+    controller1.setButton(Controller::Button::Start, true);
+    controller1.setButton(Controller::Button::Left, true);
+
+    controller2.setButton(Controller::Button::B, true);
+    controller2.setButton(Controller::Button::Up, true);
+    controller2.setButton(Controller::Button::Right, true);
+
+    bus.write(0x4016, 0x01);
+    bus.write(0x4016, 0x00);
+
+    expectEqual(bus.read(0x4016), 0x01, "controller 1 read 1 returns A");
+    expectEqual(bus.read(0x4016), 0x00, "controller 1 read 2 returns B");
+    expectEqual(bus.read(0x4016), 0x00, "controller 1 read 3 returns Select");
+    expectEqual(bus.read(0x4016), 0x01, "controller 1 read 4 returns Start");
+    expectEqual(bus.read(0x4016), 0x00, "controller 1 read 5 returns Up");
+    expectEqual(bus.read(0x4016), 0x00, "controller 1 read 6 returns Down");
+    expectEqual(bus.read(0x4016), 0x01, "controller 1 read 7 returns Left");
+    expectEqual(bus.read(0x4016), 0x00, "controller 1 read 8 returns Right");
+    expectEqual(bus.read(0x4016), 0x01, "controller 1 reads after 8 buttons return 0x01");
+
+    expectEqual(bus.read(0x4017), 0x00, "controller 2 read 1 returns A");
+    expectEqual(bus.read(0x4017), 0x01, "controller 2 read 2 returns B");
+    expectEqual(bus.read(0x4017), 0x00, "controller 2 read 3 returns Select");
+    expectEqual(bus.read(0x4017), 0x00, "controller 2 read 4 returns Start");
+    expectEqual(bus.read(0x4017), 0x01, "controller 2 read 5 returns Up");
+    expectEqual(bus.read(0x4017), 0x00, "controller 2 read 6 returns Down");
+    expectEqual(bus.read(0x4017), 0x00, "controller 2 read 7 returns Left");
+    expectEqual(bus.read(0x4017), 0x01, "controller 2 read 8 returns Right");
+    expectEqual(bus.read(0x4017), 0x01, "controller 2 reads after 8 buttons return 0x01");
 
     expectEqual(bus.read(0x8000), 0x00, "cartridge address 0x8000 reads as 0x00 without cartridge");
 
