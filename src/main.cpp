@@ -5,6 +5,7 @@
 #include "CPUBus.h"
 #include "CPU.h"
 #include "Cartridge.h"
+#include "Display.h"
 #include "PPU.h"
 #include "PPUBus.h"
 
@@ -21,6 +22,7 @@ int main(int argc, char* argv[]) {
     PPUBus ppuBus;
     CPU cpu;
     PPU ppu;
+    Display display;
 
     if(!cart.load(argv[1])) {
         std::cerr << "Failed to load ROM: " << argv[1] << '\n';
@@ -34,14 +36,25 @@ int main(int argc, char* argv[]) {
     cpu.connectBus(&bus);
     cpu.powerOn();
 
+    if(!display.initialize()) {
+        return EXIT_FAILURE;
+    }
+
     std::cout << "Loaded ROM: " << argv[1] << '\n';
 
-    // For now, runs until interrupted
-    while(true) {
-        ppu.clock();
-        ppu.clock();
-        ppu.clock();
-        cpu.clock();
+    while(!display.pollQuit()) {
+        while(!ppu.isFrameComplete()) {
+            ppu.clock();
+            ppu.clock();
+            ppu.clock();
+            cpu.clock();
+        }
+
+        if(!display.present(ppu.getFramebuffer())) {
+            return EXIT_FAILURE;
+        }
+
+        ppu.clearFrameComplete();
     }
 
     return EXIT_SUCCESS;
