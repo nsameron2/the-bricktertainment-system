@@ -4,6 +4,7 @@
 #include <cstdint>
 
 class Cartridge;
+class Controller;
 class PPU;
 
 
@@ -18,6 +19,8 @@ public:
     // Component connecting functions
     void insertCartridge(Cartridge* cartridge);
     void connectPPU(PPU* ppup);
+    void connectController1(Controller* controller);
+    void connectController2(Controller* controller);
 
 private:
     static constexpr uint16_t INTERNAL_RAM_SIZE = 0x0800;
@@ -28,4 +31,6 @@ private:
     // Component pointers
     Cartridge* cartridge = nullptr;
     PPU* ppu = nullptr;
+    Controller* controller1 = nullptr;
+    Controller* controller2 = nullptr;
 };
