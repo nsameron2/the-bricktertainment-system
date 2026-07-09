@@ -1,6 +1,12 @@
 #include "CPU.h"
 #include "CPUBus.h"
 
+namespace {
+
+constexpr uint16_t NMI_VECTOR_LOW = 0xFFFA;
+constexpr uint16_t NMI_VECTOR_HIGH = 0xFFFB;
+
+}
 
 // -- BASIC CPU OPERATIONS -- 
 // General
@@ -271,6 +277,20 @@ void CPU::rorMemory(uint16_t address) {
 
 void CPU::sbc(uint8_t value) {
     adc(static_cast<uint8_t>(value ^ 0xFF));
+}
+
+void CPU::nmi() {
+    pushWord(PC);
+    push((P & ~B) | U);
+
+    setFlag(I, true);
+    setFlag(U, true);
+
+    const uint8_t low = read(NMI_VECTOR_LOW);
+    const uint8_t high = read(NMI_VECTOR_HIGH);
+    PC = static_cast<uint16_t>(high) << 8 | low;
+
+    cycles = 0x07;
 }
 
 

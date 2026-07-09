@@ -50,6 +50,11 @@ int main(int argc, char* argv[]) {
             ppu.clock();
             ppu.clock();
             ppu.clock();
+
+            if(ppu.isNmiComplete()) {
+                cpu.nmi();
+            }
+
             cpu.clock();
         }
 

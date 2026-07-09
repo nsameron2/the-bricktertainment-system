@@ -17,6 +17,7 @@ public:
     // Main console functions
     void reset();
     void powerOn();
+    void nmi();
 
     void clock();
 
