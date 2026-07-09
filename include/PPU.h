@@ -14,10 +14,16 @@ class PPU {
 
         uint8_t readRegister(uint16_t address);
         void writeRegister(uint16_t address, uint8_t data);
+
+        // PPU clocking
         void clock();
+
         const std::array<uint32_t, 256 * 240>& getFramebuffer() const;
         bool isFrameComplete() const;
         void clearFrameComplete();
+        bool isNmiComplete();
+
+
 
     private:
         // Object Attribute Memory, internal to the PPU, not in bus
@@ -42,6 +48,7 @@ class PPU {
         int16_t scanline = 0;
         int16_t cycle = 0;
         bool frameComplete = false;
+        bool nmiRequested = false;
 
         // PPU rendering
         std::array<uint32_t, 256 * 240> framebuffer{};

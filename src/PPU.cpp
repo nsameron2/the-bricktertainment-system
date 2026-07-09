@@ -28,6 +28,7 @@ constexpr int16_t PPU_VISIBLE_CYCLE_END = 256;
 
 constexpr uint8_t PPUCTRL_VRAM_INCREMENT = 1 << 2;
 constexpr uint8_t PPUCTRL_BACKGROUND_PATTERN_TABLE = 1 << 4;
+constexpr uint8_t PPUCTRL_NMI_ENABLE = 1 << 7;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 
 constexpr uint16_t COARSE_X_SCROLL_MASK = 0x001F;
@@ -69,6 +70,10 @@ void PPU::clock() {
 
     if (scanline == PPU_VBLANK_SCANLINE && cycle == PPU_STATUS_EVENT_CYCLE) {
         status |= PPUSTATUS_VBLANK;
+
+        if ((control & PPUCTRL_NMI_ENABLE) != 0x00) {
+            nmiRequested = true;
+        }
     }
 
     if (scanline == PPU_PRE_RENDER_SCANLINE && cycle == PPU_STATUS_EVENT_CYCLE) {
@@ -99,6 +104,13 @@ bool PPU::isFrameComplete() const {
 
 void PPU::clearFrameComplete() {
     frameComplete = false;
+}
+
+bool PPU::isNmiComplete() {
+    const bool request = nmiRequested;
+    nmiRequested = false;
+
+    return request;
 }
 
 uint8_t PPU::readRegister(uint16_t address) {
@@ -136,11 +148,19 @@ uint8_t PPU::readRegister(uint16_t address) {
 
 void PPU::writeRegister(uint16_t address, uint8_t data) {
     switch (address & PPU_REGISTER_MASK) {
-        case 0x0000: // PPUCTRL
+        case 0x0000: { // PPUCTRL
+            const bool wasNmiEnabled = (control & PPUCTRL_NMI_ENABLE) != 0x00;
             control = data;
             tempVramAddress = (tempVramAddress & ~NAMETABLE_SELECT_MASK)
                 | (static_cast<uint16_t>(data & 0x03) << 10);
+
+            const bool isNmiEnabled = (control & PPUCTRL_NMI_ENABLE) != 0x00;
+            const bool isVBlankSet = (status & PPUSTATUS_VBLANK) != 0x00;
+            if (!wasNmiEnabled && isNmiEnabled && isVBlankSet) {
+                nmiRequested = true;
+            }
             break;
+        }
 
         case 0x0001: // PPUMASK
             mask = data;
