@@ -24,6 +24,7 @@ constexpr int16_t PPU_SCANLINES_PER_FRAME = 262;
 constexpr int16_t PPU_VBLANK_SCANLINE = 241;
 constexpr int16_t PPU_PRE_RENDER_SCANLINE = 261;
 constexpr int16_t PPU_STATUS_EVENT_CYCLE = 1;
+constexpr uint8_t PPUCTRL_NMI_ENABLE = 1 << 7;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 
 void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
@@ -214,6 +215,26 @@ int main() {
 
         runClocks(ppu, preRenderClocks - vblankClocks);
         expectFalse((ppu.status & PPUSTATUS_VBLANK) != 0x00, "pre-render scanline clears VBlank");
+    }
+
+    {
+        PPU ppu;
+
+        ppu.writeRegister(0x2000, PPUCTRL_NMI_ENABLE);
+        runClocks(ppu, clocksToProcessDot(PPU_VBLANK_SCANLINE, PPU_STATUS_EVENT_CYCLE));
+
+        expectTrue(ppu.isNmiComplete(), "PPU requests NMI when VBlank starts with PPUCTRL bit 0x80 set");
+        expectFalse(ppu.isNmiComplete(), "PPU NMI request is consumed after polling");
+    }
+
+    {
+        PPU ppu;
+
+        runClocks(ppu, clocksToProcessDot(PPU_VBLANK_SCANLINE, PPU_STATUS_EVENT_CYCLE));
+        expectFalse(ppu.isNmiComplete(), "PPU does not request NMI when PPUCTRL bit 0x80 is clear");
+
+        ppu.writeRegister(0x2000, PPUCTRL_NMI_ENABLE);
+        expectTrue(ppu.isNmiComplete(), "PPU requests NMI when PPUCTRL bit 0x80 is set during VBlank");
     }
 
     {
