@@ -1,4 +1,5 @@
 #include "Display.h"
+#include "Controller.h"
 
 #include <SDL3/SDL.h>
 
@@ -12,6 +13,41 @@ constexpr const char* WINDOW_TITLE = "The Bricktertainment System";
 
 void logSdlError(const char* operation) {
     std::cerr << operation << " failed: " << SDL_GetError() << '\n';
+}
+
+bool isQuitEvent(const SDL_Event& event) {
+    return event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+}
+
+bool mapKeyToButton(SDL_Keycode key, Controller::Button& button) {
+    switch (key) {
+        case SDLK_X:
+            button = Controller::Button::A;
+            return true;
+        case SDLK_Z:
+            button = Controller::Button::B;
+            return true;
+        case SDLK_SPACE:
+            button = Controller::Button::Select;
+            return true;
+        case SDLK_RETURN:
+            button = Controller::Button::Start;
+            return true;
+        case SDLK_UP:
+            button = Controller::Button::Up;
+            return true;
+        case SDLK_DOWN:
+            button = Controller::Button::Down;
+            return true;
+        case SDLK_LEFT:
+            button = Controller::Button::Left;
+            return true;
+        case SDLK_RIGHT:
+            button = Controller::Button::Right;
+            return true;
+        default:
+            return false;
+    }
 }
 
 }
@@ -43,8 +79,26 @@ bool Display::initialize() {
 bool Display::pollQuit() {
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+        if (isQuitEvent(event)) {
             return true;
+        }
+    }
+
+    return false;
+}
+
+bool Display::pollEvents(Controller& controller) {
+    SDL_Event event{};
+    while (SDL_PollEvent(&event)) {
+        if (isQuitEvent(event)) {
+            return true;
+        }
+
+        if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+            Controller::Button button{};
+            if (mapKeyToButton(event.key.key, button)) {
+                controller.setButton(button, event.key.down);
+            }
         }
     }
 

@@ -7,6 +7,8 @@ struct SDL_Renderer;
 struct SDL_Texture;
 struct SDL_Window;
 
+class Controller;
+
 class Display {
 public:
     static constexpr int SCREEN_WIDTH = 256;
@@ -21,6 +23,7 @@ public:
 
     bool initialize();
     bool pollQuit();
+    bool pollEvents(Controller& controller);
     bool present(const std::array<uint32_t, SCREEN_WIDTH * SCREEN_HEIGHT>& framebuffer);
     void shutdown();
 
