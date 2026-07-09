@@ -3,8 +3,24 @@
 
 namespace {
 
+constexpr uint16_t STACK_BASE = 0x0100;
+constexpr uint16_t PAGE_MASK = 0xFF00;
+constexpr uint16_t BYTE_MASK = 0x00FF;
+
 constexpr uint16_t NMI_VECTOR_LOW = 0xFFFA;
 constexpr uint16_t NMI_VECTOR_HIGH = 0xFFFB;
+constexpr uint16_t RESET_VECTOR_LOW = 0xFFFC;
+constexpr uint16_t RESET_VECTOR_HIGH = 0xFFFD;
+constexpr uint16_t IRQ_BRK_VECTOR_LOW = 0xFFFE;
+constexpr uint16_t IRQ_BRK_VECTOR_HIGH = 0xFFFF;
+
+constexpr uint8_t BIT_0_MASK = 0x01;
+constexpr uint8_t BIT_6_MASK = 0x40;
+constexpr uint8_t BIT_7_MASK = 0x80;
+constexpr uint8_t ALL_BITS_MASK = 0xFF;
+constexpr uint8_t BYTE_SHIFT = 8;
+constexpr uint8_t POWER_ON_STACK_POINTER = 0xFD;
+constexpr uint8_t NMI_CYCLES = 0x07;
 
 }
 
@@ -43,7 +59,7 @@ uint8_t CPU::fetchByte() {
 uint16_t CPU::fetchWord() {
     uint8_t low = fetchByte();
     uint8_t high = fetchByte();
-    return static_cast<uint16_t>(high) << 8 | low;
+    return static_cast<uint16_t>(high) << BYTE_SHIFT | low;
 }
 
 uint16_t CPU::getOperandAddress(AddressMode mode, bool* pageCrossed) {
@@ -71,7 +87,7 @@ uint16_t CPU::getOperandAddress(AddressMode mode, bool* pageCrossed) {
             uint16_t base = fetchWord();
             uint16_t address = base + X;
             if(pageCrossed != nullptr) {
-                *pageCrossed = (base & 0xFF00) != (address & 0xFF00);
+                *pageCrossed = (base & PAGE_MASK) != (address & PAGE_MASK);
             }
             return address;
         }
@@ -80,7 +96,7 @@ uint16_t CPU::getOperandAddress(AddressMode mode, bool* pageCrossed) {
             uint16_t base = fetchWord();
             uint16_t address = base + Y;
             if(pageCrossed != nullptr) {
-                *pageCrossed = (base & 0xFF00) != (address & 0xFF00);
+                *pageCrossed = (base & PAGE_MASK) != (address & PAGE_MASK);
             }
             return address;
         }
@@ -89,17 +105,17 @@ uint16_t CPU::getOperandAddress(AddressMode mode, bool* pageCrossed) {
             uint8_t pointer = static_cast<uint8_t>(fetchByte() + X);
             uint8_t low = read(pointer);
             uint8_t high = read(static_cast<uint8_t>(pointer + 1));
-            return static_cast<uint16_t>(high) << 8 | low;
+            return static_cast<uint16_t>(high) << BYTE_SHIFT | low;
         }
 
         case AddressMode::IndirectY: {
             uint8_t pointer = fetchByte();
             uint8_t low = read(pointer);
             uint8_t high = read(static_cast<uint8_t>(pointer + 1));
-            uint16_t base = static_cast<uint16_t>(high) << 8 | low;
+            uint16_t base = static_cast<uint16_t>(high) << BYTE_SHIFT | low;
             uint16_t address = base + Y;
             if(pageCrossed != nullptr) {
-                *pageCrossed = (base & 0xFF00) != (address & 0xFF00);
+                *pageCrossed = (base & PAGE_MASK) != (address & PAGE_MASK);
             }
             return address;
         }
@@ -113,31 +129,29 @@ uint8_t CPU::readOperand(AddressMode mode, bool* pageCrossed) {
 }
 
 void CPU::push(uint8_t data) {
-    constexpr uint16_t STACK_BASE = 0x0100;
     write(STACK_BASE | S, data);
     S--;
 }
 
 uint8_t CPU::pull() {
-    constexpr uint16_t STACK_BASE = 0x0100;
     S++;
     return read(STACK_BASE | S);
 }
 
 void CPU::pushWord(uint16_t data) {
-    push(static_cast<uint8_t>(data >> 8));
-    push(static_cast<uint8_t>(data & 0x00FF));
+    push(static_cast<uint8_t>(data >> BYTE_SHIFT));
+    push(static_cast<uint8_t>(data & BYTE_MASK));
 }
 
 uint16_t CPU::pullWord() {
     uint8_t low = pull();
     uint8_t high = pull();
-    return static_cast<uint16_t>(high) << 8 | low;
+    return static_cast<uint16_t>(high) << BYTE_SHIFT | low;
 }
 
 void CPU::updateZeroAndNegativeFlags(uint8_t value) {
     setFlag(Z, value == 0x00);
-    setFlag(N, (value & 0x80) != 0x00);
+    setFlag(N, (value & BIT_7_MASK) != 0x00);
 }
 
 void CPU::compare(uint8_t reg, uint8_t value) {
@@ -152,17 +166,17 @@ void CPU::branch(bool condition) {
         uint16_t oldPC = PC;
         PC = static_cast<uint16_t>(PC + offset);
         cycles++;
-        if((oldPC & 0xFF00) != (PC & 0xFF00)) {
+        if((oldPC & PAGE_MASK) != (PC & PAGE_MASK)) {
             cycles++;
         }
     }
 }
 
 void CPU::adc(uint8_t value) {
-    uint16_t sum = static_cast<uint16_t>(A) + value + (getFlag(C) ? 0x01 : 0x00);
+    uint16_t sum = static_cast<uint16_t>(A) + value + (getFlag(C) ? BIT_0_MASK : 0x00);
     uint8_t result = static_cast<uint8_t>(sum);
-    setFlag(C, sum > 0x00FF);
-    setFlag(V, (~(A ^ value) & (A ^ result) & 0x80) != 0x00);
+    setFlag(C, sum > BYTE_MASK);
+    setFlag(V, (~(A ^ value) & (A ^ result) & BIT_7_MASK) != 0x00);
     A = result;
     updateZeroAndNegativeFlags(A);
 }
@@ -173,14 +187,14 @@ void CPU::andOp(uint8_t value) {
 }
 
 void CPU::aslAccumulator() {
-    setFlag(C, (A & 0x80) != 0x00);
+    setFlag(C, (A & BIT_7_MASK) != 0x00);
     A = static_cast<uint8_t>(A << 1);
     updateZeroAndNegativeFlags(A);
 }
 
 void CPU::aslMemory(uint16_t address) {
     uint8_t value = read(address);
-    setFlag(C, (value & 0x80) != 0x00);
+    setFlag(C, (value & BIT_7_MASK) != 0x00);
     value = static_cast<uint8_t>(value << 1);
     write(address, value);
     updateZeroAndNegativeFlags(value);
@@ -188,8 +202,8 @@ void CPU::aslMemory(uint16_t address) {
 
 void CPU::bit(uint8_t value) {
     setFlag(Z, (A & value) == 0x00);
-    setFlag(V, (value & 0x40) != 0x00);
-    setFlag(N, (value & 0x80) != 0x00);
+    setFlag(V, (value & BIT_6_MASK) != 0x00);
+    setFlag(N, (value & BIT_7_MASK) != 0x00);
 }
 
 void CPU::dec(uint16_t address) {
@@ -225,14 +239,14 @@ void CPU::ldy(uint8_t value) {
 }
 
 void CPU::lsrAccumulator() {
-    setFlag(C, (A & 0x01) != 0x00);
+    setFlag(C, (A & BIT_0_MASK) != 0x00);
     A >>= 1;
     updateZeroAndNegativeFlags(A);
 }
 
 void CPU::lsrMemory(uint16_t address) {
     uint8_t value = read(address);
-    setFlag(C, (value & 0x01) != 0x00);
+    setFlag(C, (value & BIT_0_MASK) != 0x00);
     value >>= 1;
     write(address, value);
     updateZeroAndNegativeFlags(value);
@@ -245,38 +259,38 @@ void CPU::ora(uint8_t value) {
 
 void CPU::rolAccumulator() {
     bool carryIn = getFlag(C);
-    setFlag(C, (A & 0x80) != 0x00);
-    A = static_cast<uint8_t>((A << 1) | (carryIn ? 0x01 : 0x00));
+    setFlag(C, (A & BIT_7_MASK) != 0x00);
+    A = static_cast<uint8_t>((A << 1) | (carryIn ? BIT_0_MASK : 0x00));
     updateZeroAndNegativeFlags(A);
 }
 
 void CPU::rolMemory(uint16_t address) {
     uint8_t value = read(address);
     bool carryIn = getFlag(C);
-    setFlag(C, (value & 0x80) != 0x00);
-    value = static_cast<uint8_t>((value << 1) | (carryIn ? 0x01 : 0x00));
+    setFlag(C, (value & BIT_7_MASK) != 0x00);
+    value = static_cast<uint8_t>((value << 1) | (carryIn ? BIT_0_MASK : 0x00));
     write(address, value);
     updateZeroAndNegativeFlags(value);
 }
 
 void CPU::rorAccumulator() {
     bool carryIn = getFlag(C);
-    setFlag(C, (A & 0x01) != 0x00);
-    A = static_cast<uint8_t>((A >> 1) | (carryIn ? 0x80 : 0x00));
+    setFlag(C, (A & BIT_0_MASK) != 0x00);
+    A = static_cast<uint8_t>((A >> 1) | (carryIn ? BIT_7_MASK : 0x00));
     updateZeroAndNegativeFlags(A);
 }
 
 void CPU::rorMemory(uint16_t address) {
     uint8_t value = read(address);
     bool carryIn = getFlag(C);
-    setFlag(C, (value & 0x01) != 0x00);
-    value = static_cast<uint8_t>((value >> 1) | (carryIn ? 0x80 : 0x00));
+    setFlag(C, (value & BIT_0_MASK) != 0x00);
+    value = static_cast<uint8_t>((value >> 1) | (carryIn ? BIT_7_MASK : 0x00));
     write(address, value);
     updateZeroAndNegativeFlags(value);
 }
 
 void CPU::sbc(uint8_t value) {
-    adc(static_cast<uint8_t>(value ^ 0xFF));
+    adc(static_cast<uint8_t>(value ^ ALL_BITS_MASK));
 }
 
 void CPU::nmi() {
@@ -288,19 +302,19 @@ void CPU::nmi() {
 
     const uint8_t low = read(NMI_VECTOR_LOW);
     const uint8_t high = read(NMI_VECTOR_HIGH);
-    PC = static_cast<uint16_t>(high) << 8 | low;
+    PC = static_cast<uint16_t>(high) << BYTE_SHIFT | low;
 
-    cycles = 0x07;
+    cycles = NMI_CYCLES;
 }
 
 
 // (Physical) reset button
 void CPU::reset() {
     // PC is reset to the vector at addres FFFC -- but we need the full 16 bit vector, so two 8 bit chunks.
-    uint8_t low = read(0xFFFC);
-    uint8_t high = read(0xFFFD);
+    uint8_t low = read(RESET_VECTOR_LOW);
+    uint8_t high = read(RESET_VECTOR_HIGH);
 
-    PC = static_cast<uint16_t>(high) << 8 | low;
+    PC = static_cast<uint16_t>(high) << BYTE_SHIFT | low;
 
 
     S -= 3;
@@ -316,13 +330,13 @@ void CPU::powerOn() {
     P = 0x00;
 
     // PC requires the same process for power on as it did for reset
-    uint8_t low = read(0xFFFC);
-    uint8_t high = read(0xFFFD);
+    uint8_t low = read(RESET_VECTOR_LOW);
+    uint8_t high = read(RESET_VECTOR_HIGH);
 
-    PC = static_cast<uint16_t>(high) << 8 | low;
+    PC = static_cast<uint16_t>(high) << BYTE_SHIFT | low;
 
 
-    S = 0xFD;
+    S = POWER_ON_STACK_POINTER;
 
     // Flags
     setFlag(C, false);
@@ -409,7 +423,7 @@ void CPU::executeOpcode(uint8_t opcode) {
             pushWord(PC);
             push(P | B | U);
             setFlag(I, true);
-            PC = static_cast<uint16_t>(read(0xFFFF)) << 8 | read(0xFFFE);
+            PC = static_cast<uint16_t>(read(IRQ_BRK_VECTOR_HIGH)) << BYTE_SHIFT | read(IRQ_BRK_VECTOR_LOW);
             cycles = 0x07;
             break; // Implied
 
@@ -490,8 +504,8 @@ void CPU::executeOpcode(uint8_t opcode) {
         case 0x6C: {
             uint16_t pointer = fetchWord();
             uint8_t low = read(pointer);
-            uint8_t high = read((pointer & 0xFF00) | static_cast<uint8_t>(pointer + 1));
-            PC = static_cast<uint16_t>(high) << 8 | low;
+            uint8_t high = read((pointer & PAGE_MASK) | static_cast<uint8_t>(pointer + 1));
+            PC = static_cast<uint16_t>(high) << BYTE_SHIFT | low;
             cycles = 0x05;
             break;
         } // Indirect
