@@ -10,6 +10,7 @@ constexpr uint16_t PALETTE_START = 0x3F00;
 constexpr uint16_t SCREEN_WIDTH = 256;
 constexpr uint16_t SCREEN_HEIGHT = 240;
 constexpr uint16_t TILE_SIZE = 8;
+constexpr uint16_t LEFTMOST_SCREEN_PIXELS = 8;
 constexpr uint16_t NAMETABLE_BASE = 0x2000;
 constexpr uint16_t ATTRIBUTE_TABLE_BASE = 0x23C0;
 constexpr uint16_t NAMETABLE_ROW_TILES = 32;
@@ -29,7 +30,11 @@ constexpr int16_t PPU_VISIBLE_CYCLE_END = 256;
 constexpr uint8_t PPUCTRL_VRAM_INCREMENT = 1 << 2;
 constexpr uint8_t PPUCTRL_BACKGROUND_PATTERN_TABLE = 1 << 4;
 constexpr uint8_t PPUCTRL_NMI_ENABLE = 1 << 7;
+constexpr uint8_t PPUMASK_GRAYSCALE = 1 << 0;
+constexpr uint8_t PPUMASK_SHOW_BACKGROUND_LEFT = 1 << 1;
+constexpr uint8_t PPUMASK_SHOW_BACKGROUND = 1 << 3;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
+constexpr uint8_t GRAYSCALE_PALETTE_MASK = 0x30;
 
 constexpr uint16_t COARSE_X_SCROLL_MASK = 0x001F;
 constexpr uint16_t COARSE_Y_SCROLL_MASK = 0x03E0;
@@ -65,9 +70,28 @@ void PPU::clock() {
         && cycle >= PPU_VISIBLE_CYCLE_START && cycle <= PPU_VISIBLE_CYCLE_END) {
         const uint16_t x = static_cast<uint16_t>(cycle - PPU_VISIBLE_CYCLE_START);
         const uint16_t y = static_cast<uint16_t>(scanline);
-        framebuffer[(y * SCREEN_WIDTH) + x] = nesColorToRgb(getBackgroundPixel(x, y));
+
+        // PPUMASK
+        const bool backgroundEnabled = (mask & PPUMASK_SHOW_BACKGROUND) != 0x00;
+        const bool backgroundInLeftColumn = (mask & PPUMASK_SHOW_BACKGROUND_LEFT) != 0x00;
+        const bool isInLeftColumn = x < LEFTMOST_SCREEN_PIXELS;
+
+        uint8_t colorIndex = readVram(PALETTE_START); // Universal backdrop color.
+
+        if (backgroundEnabled && (!isInLeftColumn || backgroundInLeftColumn)) {
+            colorIndex = getBackgroundPixel(x, y);
+        }
+
+        if ((mask & PPUMASK_GRAYSCALE) != 0x00) {
+            colorIndex &= GRAYSCALE_PALETTE_MASK;
+        }
+
+        // Finalize our color at our calculated x and y values
+        framebuffer[(y * SCREEN_WIDTH) + x] = nesColorToRgb(colorIndex);
     }
 
+
+    // VBlank handling
     if (scanline == PPU_VBLANK_SCANLINE && cycle == PPU_STATUS_EVENT_CYCLE) {
         status |= PPUSTATUS_VBLANK;
 
