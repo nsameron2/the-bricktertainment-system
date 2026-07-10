@@ -12,7 +12,7 @@ constexpr uint16_t SCREEN_HEIGHT = 240;
 constexpr uint16_t TILE_SIZE = 8;
 constexpr uint16_t LEFTMOST_SCREEN_PIXELS = 8;
 constexpr uint16_t NAMETABLE_BASE = 0x2000;
-constexpr uint16_t ATTRIBUTE_TABLE_BASE = 0x23C0;
+constexpr uint16_t ATTRIBUTE_TABLE_OFFSET = 0x03C0;
 constexpr uint16_t NAMETABLE_ROW_TILES = 32;
 constexpr uint16_t ATTRIBUTE_TABLE_ROW_BYTES = 8;
 constexpr uint16_t BYTES_PER_PATTERN_TILE = 16;
@@ -39,6 +39,7 @@ constexpr uint8_t GRAYSCALE_PALETTE_MASK = 0x30;
 constexpr uint16_t COARSE_X_SCROLL_MASK = 0x001F;
 constexpr uint16_t COARSE_Y_SCROLL_MASK = 0x03E0;
 constexpr uint16_t NAMETABLE_SELECT_MASK = 0x0C00;
+constexpr uint16_t NAMETABLE_SELECT_SHIFT = 10;
 constexpr uint16_t FINE_Y_SCROLL_MASK = 0x7000;
 
 constexpr std::array<uint32_t, 64> NES_PALETTE = {
@@ -257,29 +258,49 @@ uint8_t PPU::readVram(uint16_t address) const {
 }
 
 uint8_t PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
-    const uint16_t tileX = x / TILE_SIZE;
-    const uint16_t tileY = y / TILE_SIZE;
-    const uint16_t fineX = x % TILE_SIZE;
-    const uint16_t fineY = y % TILE_SIZE;
+    // Scroll handling. We get the amount to scroll, offset by that amount, then pass it into nametable handling
+    const uint16_t scrollX = ((tempVramAddress & COARSE_X_SCROLL_MASK) << 3) | this->fineX;
+    const uint16_t scrollY = ((tempVramAddress & COARSE_Y_SCROLL_MASK) >> 2)
+        | ((tempVramAddress & FINE_Y_SCROLL_MASK) >> 12);
 
-    const uint16_t nametableBase = NAMETABLE_BASE + (static_cast<uint16_t>(control & 0x03) << 10);
-    const uint16_t nametableAddress = nametableBase + (tileY * NAMETABLE_ROW_TILES) + tileX;
+    const uint16_t sourceX = x + scrollX;
+    const uint16_t sourceY = y + scrollY;
+
+    const uint16_t localX = sourceX % SCREEN_WIDTH;
+    const uint16_t localY = sourceY % SCREEN_HEIGHT;
+
+    const uint16_t tileX = localX / TILE_SIZE;
+    const uint16_t tileY = localY / TILE_SIZE;
+    const uint16_t tileFineX = localX % TILE_SIZE;
+    const uint16_t tileFineY = localY % TILE_SIZE;
+
+    const uint16_t initialNametable =
+        (tempVramAddress & NAMETABLE_SELECT_MASK) >> NAMETABLE_SELECT_SHIFT;
+    const uint16_t selectedNametable = initialNametable
+        ^ (sourceX / SCREEN_WIDTH)
+        ^ ((sourceY / SCREEN_HEIGHT) << 1);
+
+    const uint16_t nametableBase = NAMETABLE_BASE
+        + (selectedNametable << NAMETABLE_SELECT_SHIFT);
+    const uint16_t nametableAddress = nametableBase
+        + (tileY * NAMETABLE_ROW_TILES)
+        + tileX;
     const uint8_t tileId = readVram(nametableAddress);
 
     const uint16_t patternBase = (control & PPUCTRL_BACKGROUND_PATTERN_TABLE) ? 0x1000 : 0x0000;
     const uint16_t patternAddress = patternBase
         + (static_cast<uint16_t>(tileId) * BYTES_PER_PATTERN_TILE)
-        + fineY;
+        + tileFineY;
 
     const uint8_t patternLow = readVram(patternAddress);
     const uint8_t patternHigh = readVram(patternAddress + PATTERN_TILE_HIGH_PLANE_OFFSET);
 
-    const uint8_t bit = static_cast<uint8_t>(7 - fineX);
+    const uint8_t bit = static_cast<uint8_t>(7 - tileFineX);
     const uint8_t colorId = static_cast<uint8_t>(
         (((patternHigh >> bit) & 0x01) << 1)
         | ((patternLow >> bit) & 0x01));
 
-    const uint16_t attributeAddress = (nametableBase + 0x03C0)
+    const uint16_t attributeAddress = (nametableBase + ATTRIBUTE_TABLE_OFFSET)
         + ((tileY / 4) * ATTRIBUTE_TABLE_ROW_BYTES)
         + (tileX / 4);
     const uint8_t attributeByte = readVram(attributeAddress);
