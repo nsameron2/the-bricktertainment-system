@@ -13,6 +13,13 @@ constexpr uint16_t PRG_ROM_32KB_MASK = 0x7FFF;
 constexpr uint16_t PPU_CHR_END = 0x1FFF;
 constexpr uint16_t CHR_8KB_MASK = 0x1FFF;
 
+constexpr size_t INES_FLAGS_6_INDEX = 6;
+constexpr size_t INES_FLAGS_7_INDEX = 7;
+constexpr uint8_t INES_VERTICAL_MIRRORING = 1 << 0;
+constexpr uint8_t INES_TRAINER_PRESENT = 1 << 2;
+constexpr uint8_t INES_FOUR_SCREEN_VRAM = 1 << 3;
+constexpr uint16_t TRAINER_SIZE = 0x0200;
+
 }
 
 bool Cartridge::load(const char* path) {
@@ -56,7 +63,8 @@ bool Cartridge::load(const char* path) {
 
 
     // Get cartridge mapper id and handle accordingly, we only support mapper 0 for now
-    mapperId = (header[6] >> 4) | (header[7] & 0xF0);
+    const uint8_t flags6 = header[INES_FLAGS_6_INDEX];
+    mapperId = (flags6 >> 4) | (header[INES_FLAGS_7_INDEX] & 0xF0);
     if(mapperId != 0) {
         return false;
     }
@@ -65,9 +73,16 @@ bool Cartridge::load(const char* path) {
         return false;
     }
 
-    // header[6] = Optional trainer
-    if (header[6] & 0x04) {
-        cart.seekg(512, std::ios::cur);
+    // header[6] = Optional trainer, vertical mirroring, and four-screen VRAM
+    NametableMirroring loadedNametableMirroring = NametableMirroring::Horizontal;
+    if ((flags6 & INES_FOUR_SCREEN_VRAM) != 0x00) {
+        loadedNametableMirroring = NametableMirroring::FourScreen;
+    } else if ((flags6 & INES_VERTICAL_MIRRORING) != 0x00) {
+        loadedNametableMirroring = NametableMirroring::Vertical;
+    }
+
+    if ((flags6 & INES_TRAINER_PRESENT) != 0x00) {
+        cart.seekg(TRAINER_SIZE, std::ios::cur);
     }
 
 
@@ -90,6 +105,7 @@ bool Cartridge::load(const char* path) {
 
 
    // We're done here now.
+   nametableMirroring = loadedNametableMirroring;
    return true;
 }
 
@@ -105,8 +121,13 @@ void Cartridge::reset() {
     prgBanks = 0;
     chrBanks = 0;
     mapperId = 0;
+    nametableMirroring = NametableMirroring::Horizontal;
     prgData.clear();
     chrData.clear();
+}
+
+Cartridge::NametableMirroring Cartridge::getNametableMirroring() const {
+    return nametableMirroring;
 }
 
 

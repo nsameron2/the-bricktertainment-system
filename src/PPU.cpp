@@ -105,7 +105,9 @@ void PPU::clock() {
         frameComplete = false;
     }
 
+
     cycle++;
+
 
     if (cycle >= PPU_CYCLES_PER_SCANLINE) {
         cycle = 0;
@@ -260,7 +262,8 @@ uint8_t PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
     const uint16_t fineX = x % TILE_SIZE;
     const uint16_t fineY = y % TILE_SIZE;
 
-    const uint16_t nametableAddress = NAMETABLE_BASE + (tileY * NAMETABLE_ROW_TILES) + tileX;
+    const uint16_t nametableBase = NAMETABLE_BASE + (static_cast<uint16_t>(control & 0x03) << 10);
+    const uint16_t nametableAddress = nametableBase + (tileY * NAMETABLE_ROW_TILES) + tileX;
     const uint8_t tileId = readVram(nametableAddress);
 
     const uint16_t patternBase = (control & PPUCTRL_BACKGROUND_PATTERN_TABLE) ? 0x1000 : 0x0000;
@@ -276,7 +279,7 @@ uint8_t PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
         (((patternHigh >> bit) & 0x01) << 1)
         | ((patternLow >> bit) & 0x01));
 
-    const uint16_t attributeAddress = ATTRIBUTE_TABLE_BASE
+    const uint16_t attributeAddress = (nametableBase + 0x03C0)
         + ((tileY / 4) * ATTRIBUTE_TABLE_ROW_BYTES)
         + (tileX / 4);
     const uint8_t attributeByte = readVram(attributeAddress);

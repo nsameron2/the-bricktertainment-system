@@ -14,11 +14,13 @@ public:
     uint8_t read(uint16_t address) const;
 
 private:
-    // Internal PPU VRAM
-    std::array<uint8_t, 2048> nametableRam{};
+    // Normal cartridges mirror 2 KiB of nametable RAM; four-screen cartridges use all 4 KiB.
+    std::array<uint8_t, 0x1000> nametableRam{};
     std::array<uint8_t, 32> paletteRam{};
 
 
     // For cartrdige interaction
     Cartridge* cartridge = nullptr;
+
+    uint16_t mirrorNametableAddress(uint16_t address) const;
 };
