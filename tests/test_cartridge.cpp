@@ -14,6 +14,9 @@ namespace {
 constexpr size_t INES_HEADER_SIZE = 16;
 constexpr size_t PRG_BANK_SIZE = 16 * 1024;
 constexpr size_t CHR_BANK_SIZE = 8 * 1024;
+constexpr uint8_t INES_VERTICAL_MIRRORING = 1 << 0;
+constexpr uint8_t INES_TRAINER_PRESENT = 1 << 2;
+constexpr uint8_t INES_FOUR_SCREEN_VRAM = 1 << 3;
 
 void expectTrue(bool value, const char* message) {
     if (!value) {
@@ -101,6 +104,8 @@ int main() {
     const auto shortHeaderPath = testPath("brick_test_short_header.nes");
     const auto badMagicPath = testPath("brick_test_bad_magic.nes");
     const auto validChrRomPath = testPath("brick_test_valid_chr_rom.nes");
+    const auto verticalMirroringPath = testPath("brick_test_vertical_mirroring.nes");
+    const auto fourScreenPath = testPath("brick_test_four_screen.nes");
     const auto trainerPath = testPath("brick_test_trainer.nes");
     const auto chrRamPath = testPath("brick_test_chr_ram.nes");
     const auto invalidPrgBanksPath = testPath("brick_test_invalid_prg_banks.nes");
@@ -136,6 +141,26 @@ int main() {
         Cartridge cart;
         expectTrue(cart.load(validChrRomPath.string().c_str()),
                    "valid cartridge with PRG ROM and CHR ROM returns true");
+        expectTrue(cart.getNametableMirroring() == Cartridge::NametableMirroring::Horizontal,
+                   "iNES header without mirroring flags selects horizontal mirroring");
+    }
+
+    writeRom(verticalMirroringPath, makeHeader(1, 1, INES_VERTICAL_MIRRORING), false);
+    {
+        Cartridge cart;
+        expectTrue(cart.load(verticalMirroringPath.string().c_str()),
+                   "vertical-mirroring cartridge loads successfully");
+        expectTrue(cart.getNametableMirroring() == Cartridge::NametableMirroring::Vertical,
+                   "iNES header bit 0 selects vertical mirroring");
+    }
+
+    writeRom(fourScreenPath, makeHeader(1, 1, INES_FOUR_SCREEN_VRAM), false);
+    {
+        Cartridge cart;
+        expectTrue(cart.load(fourScreenPath.string().c_str()),
+                   "four-screen cartridge loads successfully");
+        expectTrue(cart.getNametableMirroring() == Cartridge::NametableMirroring::FourScreen,
+                   "iNES header bit 3 selects four-screen VRAM");
     }
 
     {
@@ -159,7 +184,7 @@ int main() {
                     "Mapper 0 cartridge with invalid PRG bank count returns false");
     }
 
-    writeRom(trainerPath, makeHeader(1, 1, 0x04), true);
+    writeRom(trainerPath, makeHeader(1, 1, INES_TRAINER_PRESENT), true);
     {
         Cartridge cart;
         expectTrue(cart.load(trainerPath.string().c_str()),
@@ -262,6 +287,8 @@ int main() {
     std::filesystem::remove(shortHeaderPath);
     std::filesystem::remove(badMagicPath);
     std::filesystem::remove(validChrRomPath);
+    std::filesystem::remove(verticalMirroringPath);
+    std::filesystem::remove(fourScreenPath);
     std::filesystem::remove(trainerPath);
     std::filesystem::remove(chrRamPath);
     std::filesystem::remove(invalidPrgBanksPath);
