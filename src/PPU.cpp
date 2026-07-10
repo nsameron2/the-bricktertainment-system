@@ -77,18 +77,21 @@ void PPU::clock() {
         const bool backgroundInLeftColumn = (mask & PPUMASK_SHOW_BACKGROUND_LEFT) != 0x00;
         const bool isInLeftColumn = x < LEFTMOST_SCREEN_PIXELS;
 
-        uint8_t colorIndex = readVram(PALETTE_START); // Universal backdrop color.
+        Pixel backgroundPixel{
+            static_cast<uint8_t>(readVram(PALETTE_START) & NES_PALETTE_INDEX_MASK),
+            false,
+        };
 
         if (backgroundEnabled && (!isInLeftColumn || backgroundInLeftColumn)) {
-            colorIndex = getBackgroundPixel(x, y);
+            backgroundPixel = getBackgroundPixel(x, y);
         }
 
         if ((mask & PPUMASK_GRAYSCALE) != 0x00) {
-            colorIndex &= GRAYSCALE_PALETTE_MASK;
+            backgroundPixel.colorIndex &= GRAYSCALE_PALETTE_MASK;
         }
 
         // Finalize our color at our calculated x and y values
-        framebuffer[(y * SCREEN_WIDTH) + x] = nesColorToRgb(colorIndex);
+        framebuffer[(y * SCREEN_WIDTH) + x] = nesColorToRgb(backgroundPixel.colorIndex);
     }
 
 
@@ -257,7 +260,7 @@ uint8_t PPU::readVram(uint16_t address) const {
     return 0x00;
 }
 
-uint8_t PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
+PPU::Pixel PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
     // Scroll handling. We get the amount to scroll, offset by that amount, then pass it into nametable handling
     const uint16_t scrollX = ((tempVramAddress & COARSE_X_SCROLL_MASK) << 3) | this->fineX;
     const uint16_t scrollY = ((tempVramAddress & COARSE_Y_SCROLL_MASK) >> 2)
@@ -315,7 +318,10 @@ uint8_t PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
         paletteAddress = PALETTE_START;
     }
 
-    return readVram(paletteAddress) & NES_PALETTE_INDEX_MASK;
+    return {
+        static_cast<uint8_t>(readVram(paletteAddress) & NES_PALETTE_INDEX_MASK),
+        colorId != 0x00,
+    };
 }
 
 uint32_t PPU::nesColorToRgb(uint8_t colorIndex) const {
