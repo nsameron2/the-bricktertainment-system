@@ -25,6 +25,8 @@ constexpr int16_t PPU_VBLANK_SCANLINE = 241;
 constexpr int16_t PPU_PRE_RENDER_SCANLINE = 261;
 constexpr int16_t PPU_STATUS_EVENT_CYCLE = 1;
 constexpr uint8_t PPUCTRL_NMI_ENABLE = 1 << 7;
+constexpr uint8_t PPUMASK_SHOW_BACKGROUND_LEFT = 1 << 1;
+constexpr uint8_t PPUMASK_SHOW_BACKGROUND = 1 << 3;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 
 void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
@@ -283,6 +285,7 @@ int main() {
                       0xFF4CD020,
                       "NES color conversion masks color index to 0x00-0x3F");
 
+        ppu.writeRegister(0x2001, PPUMASK_SHOW_BACKGROUND | PPUMASK_SHOW_BACKGROUND_LEFT);
         runClocks(ppu, 0x0002);
         expectEqual32(ppu.getFramebuffer()[0x0000],
                       0xFF4CD020,

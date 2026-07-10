@@ -1,13 +1,18 @@
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <initializer_list>
+#include <vector>
 
 #define private public
 #include "CPU.h"
 #undef private
 
 #include "CPUBus.h"
+#include "Cartridge.h"
 
 namespace {
 
@@ -19,6 +24,12 @@ constexpr uint8_t FLAG_B = 1 << 4;
 constexpr uint8_t FLAG_U = 1 << 5;
 constexpr uint8_t FLAG_V = 1 << 6;
 constexpr uint8_t FLAG_N = 1 << 7;
+
+constexpr size_t INES_HEADER_SIZE = 16;
+constexpr size_t PRG_BANK_SIZE = 16 * 1024;
+constexpr uint16_t PRG_ROM_16KB_MASK = 0x3FFF;
+constexpr uint16_t NMI_VECTOR_LOW = 0xFFFA;
+constexpr uint16_t RESET_VECTOR_LOW = 0xFFFC;
 
 void expectEqual8(uint8_t actual, uint8_t expected, const char* message) {
     if(actual != expected) {
@@ -42,6 +53,13 @@ void expectEqual16(uint16_t actual, uint16_t expected, const char* message) {
     }
 }
 
+void expectTrue(bool value, const char* message) {
+    if(!value) {
+        std::fprintf(stderr, "FAIL: %s\n", message);
+        std::exit(EXIT_FAILURE);
+    }
+}
+
 void expectFlag(const CPU& cpu, uint8_t flag, bool expected, const char* message) {
     bool actual = (cpu.P & flag) != 0x00;
     if(actual != expected) {
@@ -53,6 +71,34 @@ void expectFlag(const CPU& cpu, uint8_t flag, bool expected, const char* message
                      cpu.P);
         std::exit(EXIT_FAILURE);
     }
+}
+
+std::array<uint8_t, INES_HEADER_SIZE> makeHeader(uint8_t prgBanks,
+                                                 uint8_t chrBanks) {
+    std::array<uint8_t, INES_HEADER_SIZE> header{};
+    header[0] = 'N';
+    header[1] = 'E';
+    header[2] = 'S';
+    header[3] = 0x1A;
+    header[4] = prgBanks;
+    header[5] = chrBanks;
+    return header;
+}
+
+void writeBytes(std::ofstream& file, const std::vector<uint8_t>& bytes) {
+    file.write(reinterpret_cast<const char*>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
+}
+
+void writeRomData(const std::filesystem::path& path,
+                  const std::array<uint8_t, INES_HEADER_SIZE>& header,
+                  const std::vector<uint8_t>& prgData,
+                  const std::vector<uint8_t>& chrData) {
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(header.data()),
+               static_cast<std::streamsize>(header.size()));
+    writeBytes(file, prgData);
+    writeBytes(file, chrData);
 }
 
 void loadProgram(CPUBus& bus, std::initializer_list<uint8_t> bytes, uint16_t start = 0x0000) {
@@ -292,6 +338,42 @@ void testCompareBitAndSbcOpcodes() {
     expectFlag(cpu, FLAG_N, false, "SBC clears N for 0x3F");
 }
 
+void testNmiPushesCpuStateAndJumpsToVector() {
+    const auto nmiPath = std::filesystem::temp_directory_path() / "brick_test_cpu_nmi.nes";
+    std::vector<uint8_t> prgData(PRG_BANK_SIZE, 0xEA);
+    prgData[NMI_VECTOR_LOW & PRG_ROM_16KB_MASK] = 0x00;
+    prgData[(NMI_VECTOR_LOW + 1) & PRG_ROM_16KB_MASK] = 0x90;
+    prgData[RESET_VECTOR_LOW & PRG_ROM_16KB_MASK] = 0x00;
+    prgData[(RESET_VECTOR_LOW + 1) & PRG_ROM_16KB_MASK] = 0x80;
+    writeRomData(nmiPath, makeHeader(1, 0), prgData, {});
+
+    Cartridge cartridge;
+    CPUBus bus;
+    CPU cpu;
+
+    expectTrue(cartridge.load(nmiPath.string().c_str()), "NMI test cartridge loads");
+    bus.insertCartridge(&cartridge);
+    connectAndPowerOn(cpu, bus);
+
+    cpu.PC = 0x8123;
+    cpu.P = FLAG_C | FLAG_B | FLAG_U | FLAG_N;
+
+    cpu.nmi();
+
+    expectEqual16(cpu.PC, 0x9000, "NMI jumps to vector at 0xFFFA/0xFFFB");
+    expectEqual8(cpu.S, 0xFA, "NMI pushes PC and status to stack");
+    expectEqual8(bus.read(0x01FD), 0x81, "NMI pushes PC high byte");
+    expectEqual8(bus.read(0x01FC), 0x23, "NMI pushes PC low byte");
+    expectEqual8(bus.read(0x01FB),
+                 FLAG_C | FLAG_U | FLAG_N,
+                 "NMI pushes status with B clear and U set");
+    expectFlag(cpu, FLAG_I, true, "NMI sets interrupt disable flag");
+    expectFlag(cpu, FLAG_U, true, "NMI keeps unused status flag set");
+    expectEqual8(cpu.cycles, 0x07, "NMI consumes 0x07 CPU cycles");
+
+    std::filesystem::remove(nmiPath);
+}
+
 }
 
 int main() {
@@ -302,6 +384,7 @@ int main() {
     testStackAndSubroutineOpcodes();
     testShiftRotateAndMemoryOpcodes();
     testCompareBitAndSbcOpcodes();
+    testNmiPushesCpuStateAndJumpsToVector();
 
     std::printf("test_cpu passed\n");
 
