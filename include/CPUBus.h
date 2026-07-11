@@ -15,6 +15,10 @@ public:
     void write(uint16_t address, uint8_t data);
     uint8_t read(uint16_t address) const;
 
+    // OAM DMA handling
+    void clockDma(bool oddCpuCycle);
+    bool isDmaActive() const;
+
 
     // Component connecting functions
     void insertCartridge(Cartridge* cartridge);
@@ -27,6 +31,13 @@ private:
 
     // Memory array, for the 2KB of RAM. Initialize it to empty.
     std::array<uint8_t, INTERNAL_RAM_SIZE> memory{};
+
+    // OAM DMA transfer state
+    uint8_t dmaPage = 0x00;
+    uint8_t dmaOffset = 0x00;
+    uint8_t dmaData = 0x00;
+    bool dmaActive = false;
+    bool dmaWaiting = true;
 
     // Component pointers
     Cartridge* cartridge = nullptr;

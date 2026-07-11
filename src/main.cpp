@@ -45,17 +45,26 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Loaded ROM: " << argv[1] << '\n';
 
+    uint64_t cpuCycle = 0;
+
     while(!display.pollEvents(controller1)) {
         while(!ppu.isFrameComplete()) {
             ppu.clock();
             ppu.clock();
             ppu.clock();
 
-            if(ppu.isNmiComplete()) {
-                cpu.nmi();
+            const bool oddCpuCycle = (cpuCycle % 2) != 0;
+            if(bus.isDmaActive()) {
+                bus.clockDma(oddCpuCycle);
+            } else {
+                if(ppu.isNmiComplete()) {
+                    cpu.nmi();
+                }
+
+                cpu.clock();
             }
 
-            cpu.clock();
+            cpuCycle++;
         }
 
         if(!display.present(ppu.getFramebuffer())) {
