@@ -36,7 +36,9 @@ constexpr uint8_t PPUCTRL_BACKGROUND_PATTERN_TABLE = 1 << 4;
 constexpr uint8_t PPUCTRL_NMI_ENABLE = 1 << 7;
 constexpr uint8_t PPUMASK_GRAYSCALE = 1 << 0;
 constexpr uint8_t PPUMASK_SHOW_BACKGROUND_LEFT = 1 << 1;
+constexpr uint8_t PPUMASK_SHOW_SPRITES_LEFT = 1 << 2;
 constexpr uint8_t PPUMASK_SHOW_BACKGROUND = 1 << 3;
+constexpr uint8_t PPUMASK_SHOW_SPRITES = 1 << 4;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 constexpr uint8_t GRAYSCALE_PALETTE_MASK = 0x30;
 
@@ -82,26 +84,40 @@ void PPU::clock() {
         const uint16_t x = static_cast<uint16_t>(cycle - PPU_VISIBLE_CYCLE_START);
         const uint16_t y = static_cast<uint16_t>(scanline);
 
-        // PPUMASK
+        Pixel pixel {
+            static_cast<uint8_t>(readVram(PALETTE_START) & NES_PALETTE_INDEX_MASK),
+            false
+        };
+
         const bool backgroundEnabled = (mask & PPUMASK_SHOW_BACKGROUND) != 0x00;
         const bool backgroundInLeftColumn = (mask & PPUMASK_SHOW_BACKGROUND_LEFT) != 0x00;
         const bool isInLeftColumn = x < LEFTMOST_SCREEN_PIXELS;
 
-        Pixel backgroundPixel{
-            static_cast<uint8_t>(readVram(PALETTE_START) & NES_PALETTE_INDEX_MASK),
-            false,
-        };
-
         if (backgroundEnabled && (!isInLeftColumn || backgroundInLeftColumn)) {
-            backgroundPixel = getBackgroundPixel(x, y);
+            pixel = getBackgroundPixel(x, y);
         }
+
+        const bool spriteEnabled = (mask & PPUMASK_SHOW_SPRITES) != 0x00;
+        const bool spriteInLeftColumn = (mask & PPUMASK_SHOW_SPRITES_LEFT) != 0x00;
+
+        if(spriteEnabled && (!isInLeftColumn || spriteInLeftColumn)) {
+            const Pixel spritePixel = getSpritePixel(x, y);
+
+            // If the sprite pixel is enabled, and if bg pixel is opaque or sprite is not behind backgorund, we make
+            // our final framebuffer pixel the sprite pixel. If not, we go back to the background pixel.
+            if (spritePixel.opaque
+                && (!pixel.opaque || !spritePixel.behindBackground)) {
+                pixel = spritePixel;
+            }
+        }
+
 
         if ((mask & PPUMASK_GRAYSCALE) != 0x00) {
-            backgroundPixel.colorIndex &= GRAYSCALE_PALETTE_MASK;
+            pixel.colorIndex &= GRAYSCALE_PALETTE_MASK;
         }
 
-        // Finalize our color at our calculated x and y values
-        framebuffer[(y * SCREEN_WIDTH) + x] = nesColorToRgb(backgroundPixel.colorIndex);
+        // Finalize our pixel at our calculated x and y values
+        framebuffer[(y * SCREEN_WIDTH) + x] = nesColorToRgb(pixel.colorIndex);
     }
 
 
