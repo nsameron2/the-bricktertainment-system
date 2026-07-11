@@ -6,6 +6,7 @@ namespace {
 constexpr uint16_t PPU_REGISTER_MASK = 0x0007;
 constexpr uint16_t PPU_ADDRESS_MASK = 0x3FFF;
 constexpr uint16_t PALETTE_START = 0x3F00;
+constexpr uint16_t SPRITE_PALETTE_START = 0x3F10;
 
 constexpr uint16_t SCREEN_WIDTH = 256;
 constexpr uint16_t SCREEN_HEIGHT = 240;
@@ -17,6 +18,8 @@ constexpr uint16_t NAMETABLE_ROW_TILES = 32;
 constexpr uint16_t ATTRIBUTE_TABLE_ROW_BYTES = 8;
 constexpr uint16_t BYTES_PER_PATTERN_TILE = 16;
 constexpr uint16_t PATTERN_TILE_HIGH_PLANE_OFFSET = 8;
+constexpr uint8_t SPRITE_COUNT = 64;
+constexpr uint8_t OAM_BYTES_PER_SPRITE = 4;
 constexpr uint8_t NES_PALETTE_INDEX_MASK = 0x3F;
 
 constexpr int16_t PPU_CYCLES_PER_SCANLINE = 341;
@@ -28,6 +31,7 @@ constexpr int16_t PPU_VISIBLE_CYCLE_START = 1;
 constexpr int16_t PPU_VISIBLE_CYCLE_END = 256;
 
 constexpr uint8_t PPUCTRL_VRAM_INCREMENT = 1 << 2;
+constexpr uint8_t PPUCTRL_SPRITE_PATTERN_TABLE = 1 << 3;
 constexpr uint8_t PPUCTRL_BACKGROUND_PATTERN_TABLE = 1 << 4;
 constexpr uint8_t PPUCTRL_NMI_ENABLE = 1 << 7;
 constexpr uint8_t PPUMASK_GRAYSCALE = 1 << 0;
@@ -36,10 +40,16 @@ constexpr uint8_t PPUMASK_SHOW_BACKGROUND = 1 << 3;
 constexpr uint8_t PPUSTATUS_VBLANK = 1 << 7;
 constexpr uint8_t GRAYSCALE_PALETTE_MASK = 0x30;
 
+constexpr uint8_t SPRITE_PALETTE_MASK = 0x03;
+constexpr uint8_t SPRITE_BEHIND_BACKGROUND = 0x20;
+constexpr uint8_t SPRITE_FLIP_HORIZONTAL = 0x40;
+constexpr uint8_t SPRITE_FLIP_VERTICAL = 0x80;
+
 constexpr uint16_t COARSE_X_SCROLL_MASK = 0x001F;
 constexpr uint16_t COARSE_Y_SCROLL_MASK = 0x03E0;
 constexpr uint16_t NAMETABLE_SELECT_MASK = 0x0C00;
 constexpr uint16_t NAMETABLE_SELECT_SHIFT = 10;
+constexpr uint16_t NAMETABLE_AXIS_MASK = 0x0001;
 constexpr uint16_t FINE_Y_SCROLL_MASK = 0x7000;
 
 constexpr std::array<uint32_t, 64> NES_PALETTE = {
@@ -279,9 +289,13 @@ PPU::Pixel PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
 
     const uint16_t initialNametable =
         (tempVramAddress & NAMETABLE_SELECT_MASK) >> NAMETABLE_SELECT_SHIFT;
+    const uint16_t horizontalNametable =
+        (sourceX / SCREEN_WIDTH) & NAMETABLE_AXIS_MASK;
+    const uint16_t verticalNametable =
+        (sourceY / SCREEN_HEIGHT) & NAMETABLE_AXIS_MASK;
     const uint16_t selectedNametable = initialNametable
-        ^ (sourceX / SCREEN_WIDTH)
-        ^ ((sourceY / SCREEN_HEIGHT) << 1);
+        ^ horizontalNametable
+        ^ (verticalNametable << 1);
 
     const uint16_t nametableBase = NAMETABLE_BASE
         + (selectedNametable << NAMETABLE_SELECT_SHIFT);
@@ -322,6 +336,72 @@ PPU::Pixel PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
         static_cast<uint8_t>(readVram(paletteAddress) & NES_PALETTE_INDEX_MASK),
         colorId != 0x00,
     };
+}
+
+PPU::Pixel PPU::getSpritePixel(uint16_t x, uint16_t y) const {
+    // Scan the OAM for the right sprite
+    for (uint8_t spriteIndex = 0; spriteIndex < SPRITE_COUNT; spriteIndex++) {
+        const uint16_t oamOffset = static_cast<uint16_t>(spriteIndex) * OAM_BYTES_PER_SPRITE;
+
+        // OAM:
+        // byte 0: Y
+        // byte 1: tile ID
+        // byte 2: attributes
+        // byte 3: X
+        const uint16_t spriteY = static_cast<uint16_t>(oam[oamOffset]) + 1;
+        const uint16_t spriteX = oam[oamOffset + 3];
+
+        // If the gotten sprite is out of bounds, go next
+        if (x < spriteX || x >= spriteX + TILE_SIZE
+            || y < spriteY || y >= spriteY + TILE_SIZE) {
+            continue;
+        }
+
+        const uint8_t tileId = oam[oamOffset + 1];
+        const uint8_t attrs = oam[oamOffset + 2];
+
+        // Pattern decoding will decide whether this covering sprite is transparent
+        uint16_t spriteLocalX = x - spriteX;
+        uint16_t spriteLocalY = y - spriteY;
+
+        if ((attrs & SPRITE_FLIP_HORIZONTAL) != 0x00) {
+            spriteLocalX = (TILE_SIZE - 1) - spriteLocalX;
+        }
+
+        if ((attrs & SPRITE_FLIP_VERTICAL) != 0x00) {
+            spriteLocalY = (TILE_SIZE - 1) - spriteLocalY;
+        }
+
+        const uint16_t patternBase = (control & PPUCTRL_SPRITE_PATTERN_TABLE) ? 0x1000 : 0x0000;
+        const uint16_t patternAddress = patternBase
+            + (static_cast<uint16_t>(tileId) * BYTES_PER_PATTERN_TILE)
+            + spriteLocalY;
+
+        const uint8_t patternLow = readVram(patternAddress);
+        const uint8_t patternHigh = readVram(patternAddress + PATTERN_TILE_HIGH_PLANE_OFFSET);
+
+        const uint8_t bit = static_cast<uint8_t>(7 - spriteLocalX);
+        const uint8_t colorId = static_cast<uint8_t>(
+            (((patternHigh >> bit) & 0x01) << 1)
+            | ((patternLow >> bit) & 0x01));
+
+        if (colorId == 0x00) {
+            continue;
+        }
+
+        const uint8_t paletteId = attrs & SPRITE_PALETTE_MASK;
+        const uint16_t paletteAddress = SPRITE_PALETTE_START
+            + (static_cast<uint16_t>(paletteId) * 4)
+            + colorId;
+
+        return {
+            static_cast<uint8_t>(readVram(paletteAddress) & NES_PALETTE_INDEX_MASK),
+            true,
+            (attrs & SPRITE_BEHIND_BACKGROUND) != 0x00,
+        };
+    }
+
+    return {0x00, false};
 }
 
 uint32_t PPU::nesColorToRgb(uint8_t colorIndex) const {

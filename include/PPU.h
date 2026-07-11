@@ -52,11 +52,11 @@ class PPU {
 
         // PPU rendering
         std::array<uint32_t, 256 * 240> framebuffer{};
-
-        // Pixel enum to know whether to render background pixel or sprite -- whether one pixel is opaque or not
+        // Pixel struct to know whether to render background pixel or sprite -- whether one pixel is opaque or not -- as well as behindBackground for sprite pixels
         struct Pixel {
             uint8_t colorIndex;
             bool opaque;
+            bool behindBackground = false;
         };
 
 
@@ -66,5 +66,6 @@ class PPU {
         void writeVram(uint16_t address, uint8_t data);
         uint8_t readVram(uint16_t address) const;
         Pixel getBackgroundPixel(uint16_t x, uint16_t y) const;
+        Pixel getSpritePixel(uint16_t x, uint16_t y) const;
         uint32_t nesColorToRgb(uint8_t colorIndex) const;
 };
