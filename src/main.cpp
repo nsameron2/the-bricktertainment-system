@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <iostream>
 
+#include "APU.h"
 #include "CPUBus.h"
 #include "CPU.h"
 #include "Cartridge.h"
@@ -24,6 +25,7 @@ int main(int argc, char* argv[]) {
     CPU cpu;
     PPU ppu;
     Display display;
+    APU apu;
     Controller controller1;
 
     if(!cart.load(argv[1])) {
@@ -40,6 +42,10 @@ int main(int argc, char* argv[]) {
     cpu.powerOn();
 
     if(!display.initialize()) {
+        return EXIT_FAILURE;
+    }
+
+    if(!apu.initialize()) {
         return EXIT_FAILURE;
     }
 

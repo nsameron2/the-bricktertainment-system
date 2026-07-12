@@ -2,7 +2,10 @@
 
 #include <SDL3/SDL.h>
 
+#include <array>
+#include <cmath>
 #include <iostream>
+#include <numbers>
 
 
 namespace {
@@ -58,7 +61,42 @@ bool APU::initialize() {
     }
 
     initialized = true;
+    if(!queueTestTone()) {
+        logSdlError("SDL_PutAudioStreamData");
+        shutdown();
+        return false;
+    }
+
     return true;
+}
+
+bool APU::queueSamples(const float* samples, const std::size_t sampleCount) {
+    if(stream == nullptr || samples == nullptr) {
+        return false;
+    }
+
+    // SDL needs byte count
+    const std::size_t byteCount = sampleCount * sizeof(float);
+
+
+    return SDL_PutAudioStreamData(stream, samples, static_cast<int>(byteCount));
+}
+
+bool APU::queueTestTone() {
+    constexpr float FREQUENCY = 440.0f;
+    constexpr float VOLUME = 0.10f;
+    constexpr std::size_t SAMPLE_COUNT = AUDIO_SAMPLE_RATE / 2;
+
+    std::array<float, SAMPLE_COUNT> samples{};
+
+    for(std::size_t i = 0; i < samples.size(); i++) {
+        const float time = static_cast<float>(i) / AUDIO_SAMPLE_RATE;
+        samples[i] = VOLUME * std::sin(
+            2.0f * std::numbers::pi_v<float> * FREQUENCY * time
+        );
+    }
+
+    return queueSamples(samples.data(), samples.size());
 }
 
 void APU::shutdown() {
