@@ -17,6 +17,10 @@ namespace {
 constexpr size_t INES_HEADER_SIZE = 16;
 constexpr size_t PRG_BANK_SIZE = 16 * 1024;
 constexpr size_t CHR_BANK_SIZE = 8 * 1024;
+constexpr uint16_t DMA_PAGE_SIZE = 0x0100;
+constexpr uint16_t OAM_ADDRESS_REGISTER = 0x2003;
+constexpr uint16_t OAM_DATA_REGISTER = 0x2004;
+constexpr uint16_t OAM_DMA_REGISTER = 0x4014;
 
 void expectTrue(bool value, const char* message) {
     if(!value) {
@@ -34,6 +38,35 @@ void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
                      actual);
         std::exit(EXIT_FAILURE);
     }
+}
+
+void expectEqual16(uint16_t actual, uint16_t expected, const char* message) {
+    if(actual != expected) {
+        std::fprintf(stderr,
+                     "FAIL: %s (expected 0x%04X, got 0x%04X)\n",
+                     message,
+                     expected,
+                     actual);
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+uint16_t runDma(CPUBus& bus, bool firstCycleOdd) {
+    uint16_t cycles = 0x0000;
+    bool oddCpuCycle = firstCycleOdd;
+
+    while(bus.isDmaActive()) {
+        bus.clockDma(oddCpuCycle);
+        oddCpuCycle = !oddCpuCycle;
+        cycles++;
+    }
+
+    return cycles;
+}
+
+uint8_t readOam(CPUBus& bus, uint8_t address) {
+    bus.write(OAM_ADDRESS_REGISTER, address);
+    return bus.read(OAM_DATA_REGISTER);
 }
 
 std::array<uint8_t, INES_HEADER_SIZE> makeHeader(uint8_t prgBanks,
@@ -108,6 +141,48 @@ int main() {
     bus.write(0x2007, 0x88);
     expectEqual(ppuBus.read(0x2400), 0x77, "CPUBus mirrors 0x2008 to PPUCTRL");
     expectEqual(ppuBus.read(0x2420), 0x88, "mirrored PPUCTRL write changes PPUDATA increment");
+
+    for(uint16_t offset = 0x0000; offset < DMA_PAGE_SIZE; offset++) {
+        bus.write(0x0200 + offset, static_cast<uint8_t>(offset ^ 0xA5));
+    }
+
+    bus.write(OAM_ADDRESS_REGISTER, 0x80);
+    bus.write(OAM_DMA_REGISTER, 0x02);
+    expectTrue(bus.isDmaActive(), "write to 0x4014 starts OAM DMA");
+
+    expectEqual16(runDma(bus, true),
+                  0x0201,
+                  "OAM DMA takes 0x0201 CPU cycles without an alignment cycle");
+    expectTrue(!bus.isDmaActive(), "OAM DMA stops after copying 0x0100 bytes");
+    expectEqual(readOam(bus, 0x80),
+                static_cast<uint8_t>(0x00 ^ 0xA5),
+                "OAM DMA writes the first source byte at the current OAMADDR");
+    expectEqual(readOam(bus, 0xFF),
+                static_cast<uint8_t>(0x7F ^ 0xA5),
+                "OAM DMA writes through the end of OAM");
+    expectEqual(readOam(bus, 0x00),
+                static_cast<uint8_t>(0x80 ^ 0xA5),
+                "OAM DMA wraps OAMADDR from 0xFF to 0x00");
+    expectEqual(readOam(bus, 0x7F),
+                static_cast<uint8_t>(0xFF ^ 0xA5),
+                "OAM DMA writes all 0x0100 source bytes after wrapping");
+
+    for(uint16_t offset = 0x0000; offset < DMA_PAGE_SIZE; offset++) {
+        bus.write(0x0300 + offset, static_cast<uint8_t>(0xFF - offset));
+    }
+
+    bus.write(OAM_ADDRESS_REGISTER, 0x00);
+    bus.write(OAM_DMA_REGISTER, 0x03);
+
+    expectEqual16(runDma(bus, false),
+                  0x0202,
+                  "OAM DMA takes 0x0202 CPU cycles when alignment is required");
+    expectEqual(readOam(bus, 0x00),
+                0xFF,
+                "aligned OAM DMA copies the first byte from its selected CPU page");
+    expectEqual(readOam(bus, 0xFF),
+                0x00,
+                "aligned OAM DMA copies the final byte from its selected CPU page");
 
     expectEqual(bus.read(0x4016), 0x00, "controller 1 read returns 0x00 without connected controller");
     expectEqual(bus.read(0x4017), 0x00, "controller 2 read returns 0x00 without connected controller");
