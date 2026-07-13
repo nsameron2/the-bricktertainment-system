@@ -6,6 +6,7 @@
 class Cartridge;
 class Controller;
 class PPU;
+class APU;
 
 
 // The CPU bus maps CPU-visible RAM, PPU registers, APU/input registers, and cartridge PRG space.
@@ -23,6 +24,7 @@ public:
     // Component connecting functions
     void insertCartridge(Cartridge* cartridge);
     void connectPPU(PPU* ppup);
+    void connectAPU(APU* apup);
     void connectController1(Controller* controller);
     void connectController2(Controller* controller);
 
@@ -42,6 +44,7 @@ private:
     // Component pointers
     Cartridge* cartridge = nullptr;
     PPU* ppu = nullptr;
+    APU* apu = nullptr;
     Controller* controller1 = nullptr;
     Controller* controller2 = nullptr;
 };

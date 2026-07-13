@@ -45,13 +45,15 @@ target_link_libraries(test_apu PRIVATE SDL3::SDL3)
 
 add_test(NAME test_apu COMMAND test_apu)
 
-add_executable(test_cpu_bus tests/test_cpu_bus.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
+add_executable(test_cpu_bus tests/test_cpu_bus.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp src/APU.cpp)
 target_include_directories(test_cpu_bus PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(test_cpu_bus PRIVATE SDL3::SDL3)
 
 add_test(NAME test_cpu_bus COMMAND test_cpu_bus)
 
-add_executable(test_cpu tests/test_cpu.cpp src/CPU.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
+add_executable(test_cpu tests/test_cpu.cpp src/CPU.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp src/APU.cpp)
 target_include_directories(test_cpu PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(test_cpu PRIVATE SDL3::SDL3)
 
 add_test(NAME test_cpu COMMAND test_cpu)
 

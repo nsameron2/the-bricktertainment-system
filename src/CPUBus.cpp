@@ -2,6 +2,7 @@
 #include "Cartridge.h"
 #include "Controller.h"
 #include "PPU.h"
+#include "APU.h"
 
 namespace {
 
@@ -10,6 +11,10 @@ constexpr uint16_t INTERNAL_RAM_MIRROR_END = 0x1FFF;
 constexpr uint16_t PPU_REGISTER_START = 0x2000;
 constexpr uint16_t PPU_REGISTER_MIRROR_END = 0x3FFF;
 constexpr uint16_t PPU_REGISTER_MASK = 0x0007;
+constexpr uint16_t APU_REGISTER_START = 0x4000;
+constexpr uint16_t APU_REGISTER_END = 0x4013;
+constexpr uint16_t APU_STATUS_REGISTER = 0x4015;
+constexpr uint16_t APU_FRAME_COUNTER_REGISTER = 0x4017;
 constexpr uint16_t OAM_DMA_ADDRESS = 0x4014;
 constexpr uint16_t CONTROLLER_STROBE_ADDRESS = 0x4016;
 constexpr uint16_t CONTROLLER_ONE_READ_ADDRESS = 0x4016;
@@ -34,6 +39,17 @@ void CPUBus::write(uint16_t address, uint8_t data) {
 
         return;
     }
+
+    if((address >= APU_REGISTER_START && address <= APU_REGISTER_END)
+        || address == APU_STATUS_REGISTER 
+        || address == APU_FRAME_COUNTER_REGISTER) {
+        if(apu) {
+            apu->writeRegister(address, data);
+        }
+
+        return;
+    }
+
 
     if(address == OAM_DMA_ADDRESS) {
         dmaPage = data;
@@ -143,6 +159,10 @@ void CPUBus::insertCartridge(Cartridge* cart) {
 
 void CPUBus::connectPPU(PPU* ppup) {
     ppu = ppup;
+}
+
+void CPUBus::connectAPU(APU* apup) {
+    apu = apup;
 }
 
 void CPUBus::connectController1(Controller* controller) {

@@ -35,6 +35,7 @@ int main(int argc, char* argv[]) {
 
     bus.insertCartridge(&cart);
     bus.connectPPU(&ppu);
+    bus.connectAPU(&apu);
     bus.connectController1(&controller1);
     ppuBus.insertCartridge(&cart);
     ppu.connectBus(&ppuBus);
@@ -69,6 +70,7 @@ int main(int argc, char* argv[]) {
 
                 cpu.clock();
             }
+            apu.clock();
 
             cpuCycle++;
         }
