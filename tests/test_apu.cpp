@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -103,6 +104,27 @@ int main() {
     apu.writeRegister(0x4015, 0x03);
     expectEqual(apu.pulse1.lengthCounter, 0x00, "enabling Pulse 1 does not reload its length counter");
     expectEqual(apu.pulse2.lengthCounter, 0x00, "enabling Pulse 2 does not reload its length counter");
+
+    apu.pulse1.timerPeriod = 0x0002;
+    apu.pulse1.timerCounter = 0x0002;
+    apu.pulse2.timerPeriod = 0x0003;
+    apu.pulse2.timerCounter = 0x0003;
+
+    apu.clock();
+    expectEqual16(apu.pulse1.timerCounter, 0x0001, "first APU clock advances Pulse 1 timer");
+    expectEqual16(apu.pulse2.timerCounter, 0x0002, "first APU clock advances Pulse 2 timer");
+
+    apu.clock();
+    expectEqual16(apu.pulse1.timerCounter, 0x0001, "second APU clock leaves Pulse 1 timer unchanged");
+    expectEqual16(apu.pulse2.timerCounter, 0x0002, "second APU clock leaves Pulse 2 timer unchanged");
+
+    for(uint8_t cycle = 0x00; cycle < 0x26; cycle++) {
+        apu.clock();
+    }
+    expectTrue(apu.sampleBufferIndex == 0, "40 CPU clocks do not produce an audio sample");
+
+    apu.clock();
+    expectTrue(apu.sampleBufferIndex == 1, "41 CPU clocks produce one audio sample");
 
     std::printf("test_apu passed\n");
     return 0;

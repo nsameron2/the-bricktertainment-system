@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -17,7 +18,7 @@ public:
     bool initialize();
     void shutdown();
     void writeRegister(uint16_t address, uint8_t data);
-
+    void clock();
 private:
     // SDL Stuff
     SDL_AudioStream* stream = nullptr;
@@ -27,6 +28,13 @@ private:
 
     // Pure APU stuff
     bool queueSamples(const float* samples, const std::size_t sampleCount);
+
+    static constexpr std::size_t AUDIO_BUFFER_SIZE = 512;
+
+    std::array<float, AUDIO_BUFFER_SIZE> sampleBuffer{};
+    std::size_t sampleBufferIndex = 0;
+    uint32_t sampleAccumulator = 0;
+    bool pulseTimerCycle = false;
 
 
     // Channels
@@ -61,7 +69,10 @@ private:
         bool enabled = false;
     };
 
-
     PulseChannel pulse1{};
     PulseChannel pulse2{};
+
+    void clockPulse(PulseChannel& pulse);
+    uint8_t pulseOutput(const PulseChannel& pulse) const;
+    float mixSample() const;
 };

@@ -10,6 +10,7 @@ namespace {
 
 constexpr int AUDIO_SAMPLE_RATE = 44100;
 constexpr int AUDIO_CHANNEL_COUNT = 1;
+constexpr uint32_t NTSC_CPU_CLOCK_RATE = 1789773;
 
 constexpr uint8_t PULSE_DUTY_SHIFT = 6;
 constexpr uint8_t PULSE_DUTY_MASK = 0x03;
@@ -31,6 +32,20 @@ constexpr uint8_t LENGTH_COUNTER_INDEX_SHIFT = 3;
 
 constexpr uint8_t PULSE_1_ENABLE = 0x01;
 constexpr uint8_t PULSE_2_ENABLE = 0x02;
+
+constexpr uint8_t PULSE_DUTY_STEP_MASK = 0x07;
+constexpr uint16_t PULSE_MINIMUM_TIMER_PERIOD = 0x0008;
+
+constexpr float PULSE_MIXER_NUMERATOR = 95.52F;
+constexpr float PULSE_MIXER_DIVISOR = 8128.0F;
+constexpr float PULSE_MIXER_OFFSET = 100.0F;
+
+constexpr std::array<std::array<uint8_t, 8>, 4> PULSE_DUTY_SEQUENCES = {{
+    {{0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
+    {{0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00}},
+    {{0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00}},
+    {{0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01}},
+}};
 
 constexpr std::array<uint8_t, 32> LENGTH_COUNTER_TABLE = {
     0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06,
@@ -202,6 +217,72 @@ bool APU::queueSamples(const float* samples, const std::size_t sampleCount) {
 
     return SDL_PutAudioStreamData(stream, samples, static_cast<int>(byteCount));
 }
+
+void APU::clock() {
+    // Pulse timers advance once every two CPU cycles.
+    pulseTimerCycle = !pulseTimerCycle;
+    if(pulseTimerCycle) {
+        clockPulse(pulse1);
+        clockPulse(pulse2);
+    }
+
+    // Convert CPU clocks to the configured audio sample rate without timing drift.
+    sampleAccumulator += AUDIO_SAMPLE_RATE;
+    if(sampleAccumulator < NTSC_CPU_CLOCK_RATE) {
+        return;
+    }
+
+    sampleAccumulator -= NTSC_CPU_CLOCK_RATE;
+    sampleBuffer[sampleBufferIndex++] = mixSample();
+
+    if(sampleBufferIndex == sampleBuffer.size()) {
+        queueSamples(sampleBuffer.data(), sampleBuffer.size());
+        sampleBufferIndex = 0;
+    }
+}
+
+void APU::clockPulse(PulseChannel& pulse) {
+    if (pulse.timerCounter == 0x0000) {
+        pulse.timerCounter = pulse.timerPeriod;
+        pulse.dutyStep = (pulse.dutyStep + 1) & PULSE_DUTY_STEP_MASK;
+    } else {
+        pulse.timerCounter--;
+    }
+}
+
+uint8_t APU::pulseOutput(const PulseChannel& pulse) const {
+    // Make sure the channel can be played
+    if (!pulse.enabled || pulse.lengthCounter == 0x00) {
+        return 0x00;
+    }
+
+    if (pulse.timerPeriod < 0x0008) {
+        return 0x00;
+    }
+
+    if (PULSE_DUTY_SEQUENCES[pulse.duty][pulse.dutyStep] == 0x00) {
+        return 0x00;
+    }
+
+    // If volume is consant, simply return the volume. If not, we need the decay level
+    return pulse.constantVolume
+        ? pulse.volume
+        : pulse.envelopeDecayLevel;
+}
+
+float APU::mixSample() const {
+    // Get the level of all instruments
+    const uint8_t pulse1Level = pulseOutput(pulse1);
+    const uint8_t pulse2Level = pulseOutput(pulse2);
+    const uint8_t pulseSum = pulse1Level + pulse2Level;
+
+    if (pulseSum == 0x00) {
+        return 0.0f;
+    }
+
+    return 95.52f / ((8128.0f / pulseSum) + 100.0f);
+};
+
 
 void APU::shutdown() {
     if(stream != nullptr) {
