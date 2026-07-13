@@ -34,7 +34,9 @@ private:
     std::array<float, AUDIO_BUFFER_SIZE> sampleBuffer{};
     std::size_t sampleBufferIndex = 0;
     uint32_t sampleAccumulator = 0;
-    bool pulseTimerCycle = false;
+    uint32_t frameCounterCycle = 0;
+    bool apuTimerCycle = false;
+    bool fiveStepFrameCounter = false;
 
 
     // Channels
@@ -69,10 +71,64 @@ private:
         bool enabled = false;
     };
 
+    struct TriangleChannel {
+        // Timer and 32-step sequencer
+        uint16_t timerPeriod = 0x0000;
+        uint16_t timerCounter = 0x0000;
+        uint8_t sequenceStep = 0x00;
+
+        // Length and linear counters
+        uint8_t lengthCounter = 0x00;
+        uint8_t linearCounter = 0x00;
+        uint8_t linearReloadValue = 0x00;
+        bool linearReloadFlag = false;
+        bool controlFlag = false; // Also halts the length counter.
+
+        bool enabled = false;
+    };
+
+    struct NoiseChannel {
+        // Timer and 15-bit linear-feedback shift register
+        uint16_t timerPeriod = 0x0000;
+        uint16_t timerCounter = 0x0000;
+        uint16_t shiftRegister = 0x0001;
+        bool mode = false;
+
+        // Length counter
+        uint8_t lengthCounter = 0x00;
+        bool lengthCounterHalt = false; // Also enables envelope looping.
+
+        // Envelope
+        uint8_t volume = 0x00;
+        uint8_t envelopeDivider = 0x00;
+        uint8_t envelopeDecayLevel = 0x00;
+        bool constantVolume = false;
+        bool envelopeStart = false;
+
+        bool enabled = false;
+    };
+
     PulseChannel pulse1{};
     PulseChannel pulse2{};
+    TriangleChannel triangle{};
+    NoiseChannel noise{};
 
     void clockPulse(PulseChannel& pulse);
+    void clockTriangle(TriangleChannel& triangleChannel);
+    void clockNoise(NoiseChannel& noiseChannel);
+    void clockFrameCounter();
+    void clockQuarterFrame();
+    void clockHalfFrame();
+
+    static void clockEnvelope(uint8_t period,
+                              bool loop,
+                              uint8_t& divider,
+                              uint8_t& decayLevel,
+                              bool& startFlag);
+    static void clockLengthCounter(uint8_t& counter, bool halt);
+
     uint8_t pulseOutput(const PulseChannel& pulse) const;
+    uint8_t triangleOutput(const TriangleChannel& triangleChannel) const;
+    uint8_t noiseOutput(const NoiseChannel& noiseChannel) const;
     float mixSample() const;
 };

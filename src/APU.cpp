@@ -32,13 +32,36 @@ constexpr uint8_t LENGTH_COUNTER_INDEX_SHIFT = 3;
 
 constexpr uint8_t PULSE_1_ENABLE = 0x01;
 constexpr uint8_t PULSE_2_ENABLE = 0x02;
+constexpr uint8_t TRIANGLE_ENABLE = 0x04;
+constexpr uint8_t NOISE_ENABLE = 0x08;
 
 constexpr uint8_t PULSE_DUTY_STEP_MASK = 0x07;
 constexpr uint16_t PULSE_MINIMUM_TIMER_PERIOD = 0x0008;
+constexpr uint8_t TRIANGLE_CONTROL_FLAG = 0x80;
+constexpr uint8_t TRIANGLE_LINEAR_RELOAD_MASK = 0x7F;
+constexpr uint8_t TRIANGLE_SEQUENCE_STEP_MASK = 0x1F;
+constexpr uint8_t NOISE_MODE_FLAG = 0x80;
+constexpr uint8_t NOISE_PERIOD_MASK = 0x0F;
+constexpr uint16_t NOISE_OUTPUT_BIT = 0x0001;
+constexpr uint8_t NOISE_NORMAL_FEEDBACK_TAP = 0x01;
+constexpr uint8_t NOISE_MODE_FEEDBACK_TAP = 0x06;
+constexpr uint8_t NOISE_FEEDBACK_SHIFT = 0x0E;
+constexpr uint8_t ENVELOPE_MAX_DECAY_LEVEL = 0x0F;
+
+constexpr uint8_t FRAME_COUNTER_MODE_5_STEP = 0x80;
+constexpr uint32_t FRAME_COUNTER_STEP_1 = 7457;
+constexpr uint32_t FRAME_COUNTER_STEP_2 = 14913;
+constexpr uint32_t FRAME_COUNTER_STEP_3 = 22371;
+constexpr uint32_t FRAME_COUNTER_STEP_4 = 29829;
+constexpr uint32_t FRAME_COUNTER_STEP_5 = 37281;
 
 constexpr float PULSE_MIXER_NUMERATOR = 95.52F;
 constexpr float PULSE_MIXER_DIVISOR = 8128.0F;
 constexpr float PULSE_MIXER_OFFSET = 100.0F;
+constexpr float TND_MIXER_NUMERATOR = 159.79F;
+constexpr float TRIANGLE_MIXER_DIVISOR = 8227.0F;
+constexpr float NOISE_MIXER_DIVISOR = 12241.0F;
+constexpr float TND_MIXER_OFFSET = 100.0F;
 
 constexpr std::array<std::array<uint8_t, 8>, 4> PULSE_DUTY_SEQUENCES = {{
     {{0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
@@ -46,6 +69,21 @@ constexpr std::array<std::array<uint8_t, 8>, 4> PULSE_DUTY_SEQUENCES = {{
     {{0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00}},
     {{0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01}},
 }};
+
+constexpr std::array<uint8_t, 32> TRIANGLE_SEQUENCE = {
+    0x0F, 0x0E, 0x0D, 0x0C, 0x0B, 0x0A, 0x09, 0x08,
+    0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+};
+
+// Each entry is the CPU-period table converted to an APU-cycle divider reload.
+constexpr std::array<uint16_t, 16> NOISE_TIMER_RELOAD_TABLE = {
+    0x0001, 0x0003, 0x0007, 0x000F,
+    0x001F, 0x002F, 0x003F, 0x004F,
+    0x0064, 0x007E, 0x00BD, 0x00FD,
+    0x017C, 0x01FB, 0x03F8, 0x07F1,
+};
 
 constexpr std::array<uint8_t, 32> LENGTH_COUNTER_TABLE = {
     0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06,
@@ -160,21 +198,39 @@ void APU::writeRegister(uint16_t address, uint8_t data) {
             break;
 
         case 0x4008: // Triangle linear counter
+            triangle.controlFlag = (data & TRIANGLE_CONTROL_FLAG) != 0x00;
+            triangle.linearReloadValue = data & TRIANGLE_LINEAR_RELOAD_MASK;
             break;
         case 0x4009: // Unused
             break;
         case 0x400A: // Triangle timer low
+            triangle.timerPeriod = (triangle.timerPeriod & TIMER_HIGH_MASK) | data;
             break;
         case 0x400B: // Triangle length counter and timer high
+            triangle.timerPeriod = (triangle.timerPeriod & TIMER_LOW_MASK)
+                | (static_cast<uint16_t>(data & TIMER_HIGH_DATA_MASK) << TIMER_HIGH_SHIFT);
+            if(triangle.enabled) {
+                triangle.lengthCounter = LENGTH_COUNTER_TABLE[data >> LENGTH_COUNTER_INDEX_SHIFT];
+            }
+            triangle.linearReloadFlag = true;
             break;
 
         case 0x400C: // Noise envelope and volume
+            noise.lengthCounterHalt = (data & LENGTH_COUNTER_HALT) != 0x00;
+            noise.constantVolume = (data & CONSTANT_VOLUME) != 0x00;
+            noise.volume = data & VOLUME_MASK;
             break;
         case 0x400D: // Unused
             break;
         case 0x400E: // Noise mode and timer period
+            noise.mode = (data & NOISE_MODE_FLAG) != 0x00;
+            noise.timerPeriod = NOISE_TIMER_RELOAD_TABLE[data & NOISE_PERIOD_MASK];
             break;
         case 0x400F: // Noise length counter
+            if(noise.enabled) {
+                noise.lengthCounter = LENGTH_COUNTER_TABLE[data >> LENGTH_COUNTER_INDEX_SHIFT];
+            }
+            noise.envelopeStart = true;
             break;
 
         case 0x4010: // DMC control and frequency
@@ -189,6 +245,8 @@ void APU::writeRegister(uint16_t address, uint8_t data) {
         case 0x4015: // Channel enables and status control
             pulse1.enabled = (data & PULSE_1_ENABLE) != 0x00;
             pulse2.enabled = (data & PULSE_2_ENABLE) != 0x00;
+            triangle.enabled = (data & TRIANGLE_ENABLE) != 0x00;
+            noise.enabled = (data & NOISE_ENABLE) != 0x00;
 
             if(!pulse1.enabled) {
                 pulse1.lengthCounter = 0x00;
@@ -197,8 +255,24 @@ void APU::writeRegister(uint16_t address, uint8_t data) {
             if(!pulse2.enabled) {
                 pulse2.lengthCounter = 0x00;
             }
+
+            if(!triangle.enabled) {
+                triangle.lengthCounter = 0x00;
+            }
+
+            if(!noise.enabled) {
+                noise.lengthCounter = 0x00;
+            }
             break;
         case 0x4017: // Frame counter
+            fiveStepFrameCounter = (data & FRAME_COUNTER_MODE_5_STEP) != 0x00;
+            frameCounterCycle = 0;
+
+            // First pass applies this immediately; hardware delays it by 3 or 4 CPU cycles.
+            if(fiveStepFrameCounter) {
+                clockQuarterFrame();
+                clockHalfFrame();
+            }
             break;
 
         default:
@@ -219,11 +293,15 @@ bool APU::queueSamples(const float* samples, const std::size_t sampleCount) {
 }
 
 void APU::clock() {
-    // Pulse timers advance once every two CPU cycles.
-    pulseTimerCycle = !pulseTimerCycle;
-    if(pulseTimerCycle) {
+    clockTriangle(triangle);
+    clockFrameCounter();
+
+    // Pulse and noise timers advance once every two CPU cycles.
+    apuTimerCycle = !apuTimerCycle;
+    if(apuTimerCycle) {
         clockPulse(pulse1);
         clockPulse(pulse2);
+        clockNoise(noise);
     }
 
     // Convert CPU clocks to the configured audio sample rate without timing drift.
@@ -250,13 +328,144 @@ void APU::clockPulse(PulseChannel& pulse) {
     }
 }
 
+void APU::clockTriangle(TriangleChannel& triangleChannel) {
+    if(triangleChannel.timerCounter == 0x0000) {
+        triangleChannel.timerCounter = triangleChannel.timerPeriod;
+
+        if(triangleChannel.lengthCounter != 0x00
+            && triangleChannel.linearCounter != 0x00) {
+            triangleChannel.sequenceStep =
+                (triangleChannel.sequenceStep + 1) & TRIANGLE_SEQUENCE_STEP_MASK;
+        }
+    } else {
+        triangleChannel.timerCounter--;
+    }
+}
+
+void APU::clockNoise(NoiseChannel& noiseChannel) {
+    if(noiseChannel.timerCounter == 0x0000) {
+        noiseChannel.timerCounter = noiseChannel.timerPeriod;
+
+        const uint8_t feedbackTap = noiseChannel.mode
+            ? NOISE_MODE_FEEDBACK_TAP
+            : NOISE_NORMAL_FEEDBACK_TAP;
+        const uint16_t feedback =
+            (noiseChannel.shiftRegister & NOISE_OUTPUT_BIT)
+            ^ ((noiseChannel.shiftRegister >> feedbackTap) & NOISE_OUTPUT_BIT);
+
+        noiseChannel.shiftRegister >>= 1;
+        noiseChannel.shiftRegister |= feedback << NOISE_FEEDBACK_SHIFT;
+    } else {
+        noiseChannel.timerCounter--;
+    }
+}
+
+void APU::clockFrameCounter() {
+    frameCounterCycle++;
+
+    switch(frameCounterCycle) {
+        case FRAME_COUNTER_STEP_1:
+            clockQuarterFrame();
+            break;
+        case FRAME_COUNTER_STEP_2:
+            clockQuarterFrame();
+            clockHalfFrame();
+            break;
+        case FRAME_COUNTER_STEP_3:
+            clockQuarterFrame();
+            break;
+        case FRAME_COUNTER_STEP_4:
+            if(!fiveStepFrameCounter) {
+                clockQuarterFrame();
+                clockHalfFrame();
+                frameCounterCycle = 0;
+            }
+            break;
+        case FRAME_COUNTER_STEP_5:
+            if(fiveStepFrameCounter) {
+                clockQuarterFrame();
+                clockHalfFrame();
+                frameCounterCycle = 0;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void APU::clockQuarterFrame() {
+    clockEnvelope(pulse1.volume,
+                  pulse1.lengthCounterHalt,
+                  pulse1.envelopeDivider,
+                  pulse1.envelopeDecayLevel,
+                  pulse1.envelopeStart);
+    clockEnvelope(pulse2.volume,
+                  pulse2.lengthCounterHalt,
+                  pulse2.envelopeDivider,
+                  pulse2.envelopeDecayLevel,
+                  pulse2.envelopeStart);
+    clockEnvelope(noise.volume,
+                  noise.lengthCounterHalt,
+                  noise.envelopeDivider,
+                  noise.envelopeDecayLevel,
+                  noise.envelopeStart);
+
+    if(triangle.linearReloadFlag) {
+        triangle.linearCounter = triangle.linearReloadValue;
+    } else if(triangle.linearCounter != 0x00) {
+        triangle.linearCounter--;
+    }
+
+    if(!triangle.controlFlag) {
+        triangle.linearReloadFlag = false;
+    }
+}
+
+void APU::clockHalfFrame() {
+    clockLengthCounter(pulse1.lengthCounter, pulse1.lengthCounterHalt);
+    clockLengthCounter(pulse2.lengthCounter, pulse2.lengthCounterHalt);
+    clockLengthCounter(triangle.lengthCounter, triangle.controlFlag);
+    clockLengthCounter(noise.lengthCounter, noise.lengthCounterHalt);
+}
+
+void APU::clockEnvelope(uint8_t period,
+                        bool loop,
+                        uint8_t& divider,
+                        uint8_t& decayLevel,
+                        bool& startFlag) {
+    if(startFlag) {
+        startFlag = false;
+        decayLevel = ENVELOPE_MAX_DECAY_LEVEL;
+        divider = period;
+        return;
+    }
+
+    if(divider != 0x00) {
+        divider--;
+        return;
+    }
+
+    divider = period;
+    if(decayLevel != 0x00) {
+        decayLevel--;
+    } else if(loop) {
+        decayLevel = ENVELOPE_MAX_DECAY_LEVEL;
+    }
+}
+
+void APU::clockLengthCounter(uint8_t& counter, bool halt) {
+    if(counter != 0x00 && !halt) {
+        counter--;
+    }
+}
+
 uint8_t APU::pulseOutput(const PulseChannel& pulse) const {
     // Make sure the channel can be played
     if (!pulse.enabled || pulse.lengthCounter == 0x00) {
         return 0x00;
     }
 
-    if (pulse.timerPeriod < 0x0008) {
+    if (pulse.timerPeriod < PULSE_MINIMUM_TIMER_PERIOD) {
         return 0x00;
     }
 
@@ -270,18 +479,52 @@ uint8_t APU::pulseOutput(const PulseChannel& pulse) const {
         : pulse.envelopeDecayLevel;
 }
 
+uint8_t APU::triangleOutput(const TriangleChannel& triangleChannel) const {
+    if(!triangleChannel.enabled
+        || triangleChannel.lengthCounter == 0x00
+        || triangleChannel.linearCounter == 0x00) {
+        return 0x00;
+    }
+
+    return TRIANGLE_SEQUENCE[triangleChannel.sequenceStep];
+}
+
+uint8_t APU::noiseOutput(const NoiseChannel& noiseChannel) const {
+    if(!noiseChannel.enabled
+        || noiseChannel.lengthCounter == 0x00
+        || (noiseChannel.shiftRegister & NOISE_OUTPUT_BIT) != 0x0000) {
+        return 0x00;
+    }
+
+    return noiseChannel.constantVolume
+        ? noiseChannel.volume
+        : noiseChannel.envelopeDecayLevel;
+}
+
 float APU::mixSample() const {
     // Get the level of all instruments
     const uint8_t pulse1Level = pulseOutput(pulse1);
     const uint8_t pulse2Level = pulseOutput(pulse2);
     const uint8_t pulseSum = pulse1Level + pulse2Level;
+    const uint8_t triangleLevel = triangleOutput(triangle);
+    const uint8_t noiseLevel = noiseOutput(noise);
 
-    if (pulseSum == 0x00) {
-        return 0.0f;
+    float output = 0.0F;
+    if(pulseSum != 0x00) {
+        output += PULSE_MIXER_NUMERATOR
+            / ((PULSE_MIXER_DIVISOR / pulseSum) + PULSE_MIXER_OFFSET);
     }
 
-    return 95.52f / ((8128.0f / pulseSum) + 100.0f);
-};
+    const float tndInput =
+        (static_cast<float>(triangleLevel) / TRIANGLE_MIXER_DIVISOR)
+        + (static_cast<float>(noiseLevel) / NOISE_MIXER_DIVISOR);
+    if(tndInput > 0.0F) {
+        output += TND_MIXER_NUMERATOR
+            / ((1.0F / tndInput) + TND_MIXER_OFFSET);
+    }
+
+    return output;
+}
 
 
 void APU::shutdown() {
