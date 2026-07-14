@@ -1,7 +1,7 @@
 # 3.20+ required for C++23
 cmake_minimum_required(VERSION 3.20)
 
-project(BricktertainmentSystem
+project(TheBricktertainmentSystem
     VERSION 0.1.0
     DESCRIPTION "The Bricktertainment System - an NES emulator"
     LANGUAGES CXX

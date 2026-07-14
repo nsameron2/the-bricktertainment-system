@@ -65,7 +65,7 @@ If SDL3 is installed in a custom location, add its prefix to `CMAKE_PREFIX_PATH`
 Pass the emulator exactly one `.nes` ROM path:
 
 ```bash
-./build/BricktertainmentSystem path/to/game.nes
+./build/TheBricktertainmentSystem path/to/game.nes
 ```
 
 ROM files are not included in this repository. Use ROM dumps that you are legally permitted to use.
