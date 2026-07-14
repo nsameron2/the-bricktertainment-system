@@ -5,10 +5,7 @@
 #include <cstdlib>
 
 #include "CPUBus.h"
-
-#define private public
 #include "APU.h"
-#undef private
 
 namespace {
 

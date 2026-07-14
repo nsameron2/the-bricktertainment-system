@@ -21,7 +21,11 @@ public:
     void writeRegister(uint16_t address, uint8_t data);
     void clock();
     void connectBus(CPUBus* busp);
+#if defined(TBS_APU_TEST_ACCESS)
+public:
+#else
 private:
+#endif
     // SDL Stuff
     SDL_AudioStream* stream = nullptr;
 

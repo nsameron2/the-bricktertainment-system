@@ -3,9 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-#define private public
 #include "PPU.h"
-#undef private
 
 #include "PPUBus.h"
 #include "Cartridge.h"

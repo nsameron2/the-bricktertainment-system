@@ -22,10 +22,11 @@ class PPU {
         bool isFrameComplete() const;
         void clearFrameComplete();
         bool isNmiComplete();
-
-
-
+#if defined(TBS_PPU_TEST_ACCESS)
+    public:
+#else
     private:
+#endif
         // Object Attribute Memory, internal to the PPU, not in bus
         std::array<uint8_t, 256> oam{};
 

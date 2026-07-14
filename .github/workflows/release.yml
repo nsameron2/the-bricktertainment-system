@@ -12,7 +12,7 @@ permissions:
 env:
   APP_NAME: TheBricktertainmentSystem
   RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
-  SDL_VERSION: 3-latest
+  SDL_VERSION: 3.4.12
 
 jobs:
   windows:
@@ -92,7 +92,7 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Verify universal executable
-        run: lipo -verify_arch x86_64 arm64 "build/$APP_NAME"
+        run: lipo "build/$APP_NAME" -verify_arch x86_64 arm64
 
       - name: Package macOS executable
         run: |
@@ -119,20 +119,69 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Build static SDL3
-        id: sdl
-        uses: libsdl-org/setup-sdl@f0131347757b3b78ed886b7f0c36b19e26aa2937
-        with:
-          version: ${{ env.SDL_VERSION }}
-          pre-release: false
-          build-type: Release
-          install-linux-dependencies: true
-          cmake-arguments: -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TEST_LIBRARY=OFF
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            ca-certificates \
+            cmake \
+            curl \
+            libasound2-dev \
+            libaudio-dev \
+            libdbus-1-dev \
+            libdecor-0-dev \
+            libdrm-dev \
+            libegl1-mesa-dev \
+            libfribidi-dev \
+            libgbm-dev \
+            libgl1-mesa-dev \
+            libgles2-mesa-dev \
+            libibus-1.0-dev \
+            libjack-dev \
+            libpipewire-0.3-dev \
+            libpulse-dev \
+            libsndio-dev \
+            libthai-dev \
+            libudev-dev \
+            libusb-1.0-0-dev \
+            libwayland-dev \
+            libx11-dev \
+            libxext-dev \
+            libxcursor-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxkbcommon-dev \
+            libxrandr-dev \
+            libxss-dev \
+            libxtst-dev \
+            ninja-build \
+            pkg-config
+
+          archive="$RUNNER_TEMP/SDL3-$SDL_VERSION.tar.gz"
+          source_dir="$RUNNER_TEMP/SDL3-$SDL_VERSION"
+          build_dir="$RUNNER_TEMP/sdl3-build"
+          install_dir="$RUNNER_TEMP/sdl3-install"
+
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            "https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL3-$SDL_VERSION.tar.gz"
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+
+          cmake -S "$source_dir" -B "$build_dir" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$install_dir" \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DSDL_SHARED=OFF \
+            -DSDL_STATIC=ON \
+            -DSDL_TEST_LIBRARY=OFF \
+            -DSDL_TESTS=OFF
+          cmake --build "$build_dir" --parallel
+          cmake --install "$build_dir"
 
       - name: Configure
         run: >-
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_PREFIX_PATH="${{ steps.sdl.outputs.prefix }}"
+          -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/sdl3-install"
 
       - name: Build
         run: cmake --build build --config Release --parallel

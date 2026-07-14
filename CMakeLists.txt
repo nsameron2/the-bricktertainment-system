@@ -41,6 +41,7 @@ enable_testing()
 
 add_executable(test_apu tests/test_apu.cpp src/APU.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
 target_include_directories(test_apu PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_compile_definitions(test_apu PRIVATE TBS_APU_TEST_ACCESS)
 target_link_libraries(test_apu PRIVATE SDL3::SDL3)
 
 add_test(NAME test_apu COMMAND test_apu)
@@ -69,5 +70,6 @@ add_test(NAME test_ppu_bus COMMAND test_ppu_bus)
 
 add_executable(test_ppu tests/test_ppu.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
 target_include_directories(test_ppu PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_compile_definitions(test_ppu PRIVATE TBS_PPU_TEST_ACCESS)
 
 add_test(NAME test_ppu COMMAND test_ppu)
