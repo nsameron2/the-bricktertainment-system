@@ -1,6 +1,8 @@
 # The Bricktertainment System
 
-<img src="assets/screenshot.png" alt="The Bricktertainment System running a game" width="128">
+<p align="center">
+  <img src="assets/screenshot.png" alt="The Bricktertainment System running a game" width="512px">
+</p>
 
 A from-scratch Nintendo Entertainment System emulator written in modern C++, powered by SDL3.
 
