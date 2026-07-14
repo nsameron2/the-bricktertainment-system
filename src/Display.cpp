@@ -21,10 +21,10 @@ bool isQuitEvent(const SDL_Event& event) {
 
 bool mapKeyToButton(SDL_Keycode key, Controller::Button& button) {
     switch (key) {
-        case SDLK_X:
+        case SDLK_Z:
             button = Controller::Button::A;
             return true;
-        case SDLK_Z:
+        case SDLK_X:
             button = Controller::Button::B;
             return true;
         case SDLK_SPACE:
