@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "CPUBus.h"
+
 #define private public
 #include "APU.h"
 #undef private
@@ -11,6 +13,10 @@
 namespace {
 
 constexpr uint32_t FIRST_QUARTER_FRAME_CPU_CYCLE = 7457;
+constexpr uint32_t AUDIO_SAMPLE_RATE = 48000;
+constexpr uint32_t NTSC_CPU_CLOCK_RATE = 1789773;
+constexpr uint32_t FIRST_AUDIO_SAMPLE_CPU_CYCLE =
+    (NTSC_CPU_CLOCK_RATE + AUDIO_SAMPLE_RATE - 1) / AUDIO_SAMPLE_RATE;
 
 void expectEqual(uint8_t actual, uint8_t expected, const char* message) {
     if(actual != expected) {
@@ -63,6 +69,54 @@ void expectNear(float actual, float expected, float tolerance, const char* messa
 
 int main() {
     APU apu;
+    CPUBus cpuBus;
+
+    apu.connectBus(&cpuBus);
+    expectTrue(apu.bus == &cpuBus, "APU connects to CPU bus for DMC reads");
+    expectEqual16(apu.dmc.sampleAddress, 0xC000, "DMC starts with hardware sample base address");
+    expectEqual16(apu.dmc.sampleLength, 0x0001, "DMC starts with minimum sample length");
+    expectEqual(apu.dmc.bitsRemaining, 0x08, "DMC output unit starts with eight bits remaining");
+    expectTrue(apu.dmc.sampleBufferEmpty, "DMC sample buffer starts empty");
+    expectTrue(apu.dmc.silence, "DMC output unit starts silent");
+
+    apu.dmc.sampleAddress = 0xC040;
+    apu.dmc.sampleLength = 0x0011;
+    apu.restartDmcSample(apu.dmc);
+    expectEqual16(apu.dmc.currentAddress, 0xC040, "restarting DMC restores configured sample address");
+    expectEqual16(apu.dmc.bytesRemaining, 0x0011, "restarting DMC restores configured sample length");
+
+    cpuBus.write(0x0005, 0xA5);
+    apu.dmc.currentAddress = 0x0005;
+    apu.dmc.bytesRemaining = 0x0002;
+    apu.dmc.sampleBufferEmpty = true;
+    apu.dmc.loop = false;
+    apu.dmc.irqEnabled = false;
+    apu.fillDmcSampleBuffer(apu.dmc);
+    expectEqual(apu.dmc.sampleBuffer, 0xA5, "DMC reader fetches a byte through CPU bus");
+    expectFalse(apu.dmc.sampleBufferEmpty, "DMC reader marks fetched sample buffer as full");
+    expectEqual16(apu.dmc.currentAddress, 0x0006, "DMC reader advances current address");
+    expectEqual16(apu.dmc.bytesRemaining, 0x0001, "DMC reader decrements remaining byte count");
+
+    apu.dmc.currentAddress = 0xFFFF;
+    apu.dmc.bytesRemaining = 0x0001;
+    apu.dmc.sampleBufferEmpty = true;
+    apu.dmc.irqEnabled = true;
+    apu.fillDmcSampleBuffer(apu.dmc);
+    expectEqual16(apu.dmc.currentAddress, 0x8000, "DMC reader wraps address from 0xFFFF to 0x8000");
+    expectEqual16(apu.dmc.bytesRemaining, 0x0000, "DMC reader finishes final sample byte");
+    expectTrue(apu.dmc.irqFlag, "DMC reader requests IRQ when an enabled sample finishes");
+
+    apu.dmc.sampleAddress = 0xC080;
+    apu.dmc.sampleLength = 0x0021;
+    apu.dmc.currentAddress = 0x0005;
+    apu.dmc.bytesRemaining = 0x0001;
+    apu.dmc.sampleBufferEmpty = true;
+    apu.dmc.loop = true;
+    apu.dmc.irqFlag = false;
+    apu.fillDmcSampleBuffer(apu.dmc);
+    expectEqual16(apu.dmc.currentAddress, 0xC080, "looping DMC restarts configured sample address");
+    expectEqual16(apu.dmc.bytesRemaining, 0x0021, "looping DMC restarts configured sample length");
+    expectFalse(apu.dmc.irqFlag, "looping DMC does not request end-of-sample IRQ");
 
     apu.writeRegister(0x4015, 0x03);
 
@@ -200,34 +254,38 @@ int main() {
     expectEqual(frameApu.triangle.lengthCounter, 0x01, "half frame decrements active triangle length");
     expectEqual(frameApu.noise.lengthCounter, 0x02, "half frame preserves halted noise length");
 
-    apu.pulse1.timerPeriod = 0x0002;
-    apu.pulse1.timerCounter = 0x0002;
-    apu.pulse2.timerPeriod = 0x0003;
-    apu.pulse2.timerCounter = 0x0003;
-    apu.triangle.timerPeriod = 0x0003;
-    apu.triangle.timerCounter = 0x0002;
-    apu.noise.timerPeriod = 0x0003;
-    apu.noise.timerCounter = 0x0002;
+    APU timingApu;
+    timingApu.pulse1.timerPeriod = 0x0002;
+    timingApu.pulse1.timerCounter = 0x0002;
+    timingApu.pulse2.timerPeriod = 0x0003;
+    timingApu.pulse2.timerCounter = 0x0003;
+    timingApu.triangle.timerPeriod = 0x0003;
+    timingApu.triangle.timerCounter = 0x0002;
+    timingApu.noise.timerPeriod = 0x0003;
+    timingApu.noise.timerCounter = 0x0002;
 
-    apu.clock();
-    expectEqual16(apu.pulse1.timerCounter, 0x0001, "first APU clock advances Pulse 1 timer");
-    expectEqual16(apu.pulse2.timerCounter, 0x0002, "first APU clock advances Pulse 2 timer");
-    expectEqual16(apu.triangle.timerCounter, 0x0001, "first APU clock advances triangle timer");
-    expectEqual16(apu.noise.timerCounter, 0x0001, "first APU clock advances noise timer");
+    timingApu.clock();
+    expectEqual16(timingApu.pulse1.timerCounter, 0x0001, "first APU clock advances Pulse 1 timer");
+    expectEqual16(timingApu.pulse2.timerCounter, 0x0002, "first APU clock advances Pulse 2 timer");
+    expectEqual16(timingApu.triangle.timerCounter, 0x0001, "first APU clock advances triangle timer");
+    expectEqual16(timingApu.noise.timerCounter, 0x0001, "first APU clock advances noise timer");
 
-    apu.clock();
-    expectEqual16(apu.pulse1.timerCounter, 0x0001, "second APU clock leaves Pulse 1 timer unchanged");
-    expectEqual16(apu.pulse2.timerCounter, 0x0002, "second APU clock leaves Pulse 2 timer unchanged");
-    expectEqual16(apu.triangle.timerCounter, 0x0000, "second APU clock advances triangle timer again");
-    expectEqual16(apu.noise.timerCounter, 0x0001, "second APU clock leaves noise timer unchanged");
+    timingApu.clock();
+    expectEqual16(timingApu.pulse1.timerCounter, 0x0001, "second APU clock leaves Pulse 1 timer unchanged");
+    expectEqual16(timingApu.pulse2.timerCounter, 0x0002, "second APU clock leaves Pulse 2 timer unchanged");
+    expectEqual16(timingApu.triangle.timerCounter, 0x0000, "second APU clock advances triangle timer again");
+    expectEqual16(timingApu.noise.timerCounter, 0x0001, "second APU clock leaves noise timer unchanged");
 
-    for(uint8_t cycle = 0x00; cycle < 0x26; cycle++) {
-        apu.clock();
+    APU sampleTimingApu;
+    for(uint32_t cycle = 0; cycle < FIRST_AUDIO_SAMPLE_CPU_CYCLE - 1; cycle++) {
+        sampleTimingApu.clock();
     }
-    expectTrue(apu.sampleBufferIndex == 0, "40 CPU clocks do not produce an audio sample");
+    expectTrue(sampleTimingApu.sampleBufferIndex == 0,
+               "audio sample is not produced before its clock-rate boundary");
 
-    apu.clock();
-    expectTrue(apu.sampleBufferIndex == 1, "41 CPU clocks produce one audio sample");
+    sampleTimingApu.clock();
+    expectTrue(sampleTimingApu.sampleBufferIndex == 1,
+               "audio sample is produced at its clock-rate boundary");
 
     std::printf("test_apu passed\n");
     return 0;

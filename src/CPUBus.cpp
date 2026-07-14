@@ -21,6 +21,7 @@ constexpr uint16_t CONTROLLER_ONE_READ_ADDRESS = 0x4016;
 constexpr uint16_t CONTROLLER_TWO_READ_ADDRESS = 0x4017;
 constexpr uint16_t PPU_OAM_DATA_REGISTER = 0x0004;
 constexpr uint8_t CPU_PAGE_SHIFT = 8;
+constexpr uint8_t DMC_DMA_STALL_CYCLES = 0x04;
 
 }
 
@@ -115,6 +116,13 @@ uint8_t CPUBus::read(uint16_t address) const {
     return 0x00;
 }
 
+uint8_t CPUBus::readDmc(uint16_t address) {
+    // CPU bus accesses are currently instruction-atomic, so use the longest
+    // normal DMC DMA stall instead of attempting read/write-cycle alignment.
+    dmcDmaCyclesRemaining = DMC_DMA_STALL_CYCLES;
+    return read(address);
+}
+
 void CPUBus::clockDma(bool oddCpuCycle) {
     if(!dmaActive) {
         return;
@@ -149,6 +157,16 @@ void CPUBus::clockDma(bool oddCpuCycle) {
 
 bool CPUBus::isDmaActive() const {
     return dmaActive;
+}
+
+void CPUBus::clockDmcDma() {
+    if(dmcDmaCyclesRemaining != 0x00) {
+        dmcDmaCyclesRemaining--;
+    }
+}
+
+bool CPUBus::isDmcDmaActive() const {
+    return dmcDmaCyclesRemaining != 0x00;
 }
 
 

@@ -39,7 +39,7 @@ endif()
 # Tests
 enable_testing()
 
-add_executable(test_apu tests/test_apu.cpp src/APU.cpp)
+add_executable(test_apu tests/test_apu.cpp src/APU.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
 target_include_directories(test_apu PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(test_apu PRIVATE SDL3::SDL3)
 

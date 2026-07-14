@@ -21,6 +21,7 @@ constexpr uint16_t DMA_PAGE_SIZE = 0x0100;
 constexpr uint16_t OAM_ADDRESS_REGISTER = 0x2003;
 constexpr uint16_t OAM_DATA_REGISTER = 0x2004;
 constexpr uint16_t OAM_DMA_REGISTER = 0x4014;
+constexpr uint16_t DMC_DMA_STALL_CYCLES = 0x0004;
 
 void expectTrue(bool value, const char* message) {
     if(!value) {
@@ -119,6 +120,20 @@ int main() {
 
     bus.write(0x1FFF, 0x7E);
     expectEqual(bus.read(0x07FF), 0x7E, "0x1FFF mirrors 0x07FF");
+
+    bus.write(0x0001, 0x5A);
+    expectTrue(!bus.isDmcDmaActive(), "DMC DMA starts inactive");
+    expectEqual(bus.readDmc(0x0001), 0x5A, "DMC DMA reads through CPU memory map");
+    expectTrue(bus.isDmcDmaActive(), "DMC read starts CPU stall");
+
+    uint16_t dmcStallCycles = 0x0000;
+    while(bus.isDmcDmaActive()) {
+        bus.clockDmcDma();
+        dmcStallCycles++;
+    }
+    expectEqual16(dmcStallCycles,
+                  DMC_DMA_STALL_CYCLES,
+                  "DMC DMA stalls CPU for four cycles");
 
     bus.write(0x2000, 0x55);
     expectEqual(bus.read(0x2000), 0x00, "PPU register address reads as 0x00 without connected PPU");

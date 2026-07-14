@@ -36,6 +36,7 @@ int main(int argc, char* argv[]) {
     bus.insertCartridge(&cart);
     bus.connectPPU(&ppu);
     bus.connectAPU(&apu);
+    apu.connectBus(&bus);
     bus.connectController1(&controller1);
     ppuBus.insertCartridge(&cart);
     ppu.connectBus(&ppuBus);
@@ -61,7 +62,9 @@ int main(int argc, char* argv[]) {
             ppu.clock();
 
             const bool oddCpuCycle = (cpuCycle % 2) != 0;
-            if(bus.isDmaActive()) {
+            if(bus.isDmcDmaActive()) {
+                bus.clockDmcDma();
+            } else if(bus.isDmaActive()) {
                 bus.clockDma(oddCpuCycle);
             } else {
                 if(ppu.isNmiComplete()) {

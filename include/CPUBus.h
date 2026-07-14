@@ -15,10 +15,15 @@ public:
     // Memory handling
     void write(uint16_t address, uint8_t data);
     uint8_t read(uint16_t address) const;
+    uint8_t readDmc(uint16_t address);
 
     // OAM DMA handling
     void clockDma(bool oddCpuCycle);
     bool isDmaActive() const;
+
+    // DMC DMA handling
+    void clockDmcDma();
+    bool isDmcDmaActive() const;
 
 
     // Component connecting functions
@@ -40,6 +45,9 @@ private:
     uint8_t dmaData = 0x00;
     bool dmaActive = false;
     bool dmaWaiting = true;
+
+    // DMC DMA transfer state
+    uint8_t dmcDmaCyclesRemaining = 0x00;
 
     // Component pointers
     Cartridge* cartridge = nullptr;

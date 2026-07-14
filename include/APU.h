@@ -6,6 +6,7 @@
 
 
 struct SDL_AudioStream;
+class CPUBus;
 
 class APU {
 public:
@@ -19,6 +20,7 @@ public:
     void shutdown();
     void writeRegister(uint16_t address, uint8_t data);
     void clock();
+    void connectBus(CPUBus* busp);
 private:
     // SDL Stuff
     SDL_AudioStream* stream = nullptr;
@@ -37,6 +39,7 @@ private:
     uint32_t frameCounterCycle = 0;
     bool apuTimerCycle = false;
     bool fiveStepFrameCounter = false;
+    CPUBus* bus = nullptr;
 
 
     // Channels
@@ -108,14 +111,41 @@ private:
         bool enabled = false;
     };
 
+    struct DmcChannel {
+        // Configuration
+        uint16_t timerPeriod = 0x0000;
+        uint16_t timerCounter = 0x0000;
+        uint16_t sampleAddress = 0xC000;
+        uint16_t sampleLength = 0x0001;
+        uint8_t outputLevel = 0x00;
+        bool irqEnabled = false;
+        bool irqFlag = false;
+        bool loop = false;
+
+        // Memory reader
+        uint16_t currentAddress = 0xC000;
+        uint16_t bytesRemaining = 0x0000;
+        uint8_t sampleBuffer = 0x00;
+        bool sampleBufferEmpty = true;
+
+        // Output unit
+        uint8_t shiftRegister = 0x00;
+        uint8_t bitsRemaining = 0x08;
+        bool silence = true;
+    };
+
     PulseChannel pulse1{};
     PulseChannel pulse2{};
     TriangleChannel triangle{};
     NoiseChannel noise{};
+    DmcChannel dmc{};
 
     void clockPulse(PulseChannel& pulse);
     void clockTriangle(TriangleChannel& triangleChannel);
     void clockNoise(NoiseChannel& noiseChannel);
+    void clockDmc(DmcChannel& dmcChannel);
+    void restartDmcSample(DmcChannel& dmcChannel);
+    void fillDmcSampleBuffer(DmcChannel& dmcChannel);
     void clockFrameCounter();
     void clockQuarterFrame();
     void clockHalfFrame();
@@ -130,5 +160,6 @@ private:
     uint8_t pulseOutput(const PulseChannel& pulse) const;
     uint8_t triangleOutput(const TriangleChannel& triangleChannel) const;
     uint8_t noiseOutput(const NoiseChannel& noiseChannel) const;
+    uint8_t dmcOutput(const DmcChannel& dmcChannel) const;
     float mixSample() const;
 };
