@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=The Bricktertainment System
+Comment=Nintendo Entertainment System emulator
+Exec=TheBricktertainmentSystem %f
+Icon=thebricktertainmentsystem
+Terminal=false
+Categories=Game;Emulator;
+MimeType=application/x-nes-rom;

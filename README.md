@@ -108,8 +108,10 @@ The CPU and PPU use separate address spaces and buses, matching the physical con
 ## Project Layout
 
 ```text
+.github/    GitHub Actions workflows
 assets/      Static media and other project resources
 include/     Component interfaces
+packaging/   Platform-specific distribution metadata
 src/         Emulator and SDL3 implementations
 tests/       Standalone unit-test targets
 CMakeLists.txt
