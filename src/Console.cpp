@@ -20,7 +20,7 @@ bool Console::initialize(const char* romPath) {
     }
 
     cpu.powerOn();
-    cpuCycle = 0;
+    cpuCycleCount = 0;
     return true;
 }
 
@@ -33,7 +33,7 @@ void Console::clock() {
     ppu.clock();
     ppu.clock();
 
-    const bool oddCpuCycle = (cpuCycle % 2) != 0;
+    const bool oddCpuCycle = (cpuCycleCount % 2) != 0;
     if(cpuBus.isDmcDmaActive()) {
         cpuBus.clockDmcDma();
     } else if(cpuBus.isDmaActive()) {
@@ -47,7 +47,7 @@ void Console::clock() {
     }
 
     apu.clock();
-    cpuCycle++;
+    cpuCycleCount++;
 }
 
 void Console::runFrame() {
@@ -64,4 +64,16 @@ const std::array<uint32_t, 256 * 240>& Console::getFramebuffer() const {
 
 Controller& Console::getController1() {
     return controller1;
+}
+
+uint64_t Console::getCpuCycleCount() const {
+    return cpuCycleCount;
+}
+
+uint64_t Console::getPpuCycleCount() const {
+    return cpuCycleCount * PPU_CYCLES_PER_CPU_CYCLE;
+}
+
+uint64_t Console::getApuCycleCount() const {
+    return cpuCycleCount;
 }

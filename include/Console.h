@@ -28,8 +28,13 @@ public:
 
     const std::array<uint32_t, 256 * 240>& getFramebuffer() const;
     Controller& getController1();
+    uint64_t getCpuCycleCount() const;
+    uint64_t getPpuCycleCount() const;
+    uint64_t getApuCycleCount() const;
 
 private:
+    static constexpr uint64_t PPU_CYCLES_PER_CPU_CYCLE = 3;
+
     Cartridge cartridge;
     CPUBus cpuBus;
     PPUBus ppuBus;
@@ -38,5 +43,6 @@ private:
     APU apu;
     Controller controller1;
 
-    uint64_t cpuCycle = 0;
+    // Includes CPU-rate cycles during which DMA stalls instruction execution.
+    uint64_t cpuCycleCount = 0;
 };
