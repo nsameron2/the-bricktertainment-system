@@ -1,13 +1,38 @@
 #include <cstdlib>
 #include <iostream>
+#include <string_view>
 
+#include "Benchmark.h"
 #include "Console.h"
 #include "Display.h"
 
 
+namespace {
+
+constexpr std::string_view BENCHMARK_FLAG = "--benchmark";
+constexpr float DEFAULT_BENCHMARK_DURATION_SECONDS = 5.0F;
+
+
+void printUsage(const char* programName) {
+    std::cerr << "USAGE: " << programName << " [rom.nes]\n"
+              << "       " << programName << " --benchmark [rom.nes]\n";
+}
+
+}
+
 int main(int argc, char* argv[]) {
+    if(argc >= 2 && std::string_view(argv[1]) == BENCHMARK_FLAG) {
+        if(argc != 3) {
+            printUsage(argv[0]);
+            return EXIT_FAILURE;
+        }
+
+        Benchmark benchmark;
+        return benchmark.run(argv[2], DEFAULT_BENCHMARK_DURATION_SECONDS);
+    }
+
     if(argc != 2) {
-        std::cerr << "USAGE: " << argv[0] << " [rom.nes]\n";
+        printUsage(argv[0]);
         return EXIT_FAILURE;
     }
 
