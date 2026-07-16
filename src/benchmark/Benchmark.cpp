@@ -1,5 +1,5 @@
-#include "Benchmark.h"
-#include "Console.h"
+#include "benchmark/Benchmark.h"
+#include "core/Console.h"
 
 #include <array>
 #include <chrono>
@@ -51,7 +51,9 @@ int Benchmark::run(const char* romPath, const float runTime) {
     const uint64_t startingPpuCycles = benchConsole.getPpuCycleCount();
     const uint64_t startingApuCycles = benchConsole.getApuCycleCount();
     const auto benchStart = Clock::now();
-    const auto benchmarkDuration = std::chrono::duration<float>(runTime);
+    const auto benchmarkDuration = std::chrono::duration_cast<Clock::duration>(
+        std::chrono::duration<double>(runTime)
+    );
     const auto benchmarkEnd = benchStart + benchmarkDuration;
 
     // Run benchmark

@@ -1,5 +1,5 @@
-#include "Display.h"
-#include "Controller.h"
+#include "frontend/Display.h"
+#include "input/Controller.h"
 
 #include <SDL3/SDL.h>
 

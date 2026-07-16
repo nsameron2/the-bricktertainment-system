@@ -1,5 +1,5 @@
-#include "PPUBus.h"
-#include "Cartridge.h"
+#include "core/PPUBus.h"
+#include "core/Cartridge.h"
 
 namespace {
 

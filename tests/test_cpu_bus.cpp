@@ -1,8 +1,8 @@
-#include "CPUBus.h"
-#include "Cartridge.h"
-#include "Controller.h"
-#include "PPU.h"
-#include "PPUBus.h"
+#include "core/CPUBus.h"
+#include "core/Cartridge.h"
+#include "core/PPU.h"
+#include "core/PPUBus.h"
+#include "input/Controller.h"
 
 #include <array>
 #include <cstdint>

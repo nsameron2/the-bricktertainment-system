@@ -1,5 +1,5 @@
-#include "PPU.h"
-#include "PPUBus.h"
+#include "core/PPU.h"
+#include "core/PPUBus.h"
 
 namespace {
 

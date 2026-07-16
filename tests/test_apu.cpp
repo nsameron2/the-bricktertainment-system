@@ -4,8 +4,8 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "CPUBus.h"
-#include "APU.h"
+#include "core/APU.h"
+#include "core/CPUBus.h"
 
 namespace {
 

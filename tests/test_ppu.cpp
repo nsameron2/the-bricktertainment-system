@@ -3,10 +3,10 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "PPU.h"
+#include "core/PPU.h"
 
-#include "PPUBus.h"
-#include "Cartridge.h"
+#include "core/PPUBus.h"
+#include "core/Cartridge.h"
 
 #include <filesystem>
 #include <fstream>

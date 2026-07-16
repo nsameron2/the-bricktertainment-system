@@ -2,9 +2,9 @@
 #include <iostream>
 #include <string_view>
 
-#include "Benchmark.h"
-#include "Console.h"
-#include "Display.h"
+#include "benchmark/Benchmark.h"
+#include "core/Console.h"
+#include "frontend/Display.h"
 
 
 namespace {

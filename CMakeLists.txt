@@ -39,36 +39,73 @@ endif()
 # Tests
 enable_testing()
 
-add_executable(test_apu tests/test_apu.cpp src/APU.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
+add_executable(test_apu
+    tests/test_apu.cpp
+    src/core/APU.cpp
+    src/core/CPUBus.cpp
+    src/core/Cartridge.cpp
+    src/core/PPU.cpp
+    src/core/PPUBus.cpp
+    src/input/Controller.cpp
+)
 target_include_directories(test_apu PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_compile_definitions(test_apu PRIVATE TBS_APU_TEST_ACCESS)
 target_link_libraries(test_apu PRIVATE SDL3::SDL3)
 
 add_test(NAME test_apu COMMAND test_apu)
 
-add_executable(test_cpu_bus tests/test_cpu_bus.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp src/APU.cpp)
+add_executable(test_cpu_bus
+    tests/test_cpu_bus.cpp
+    src/core/APU.cpp
+    src/core/CPUBus.cpp
+    src/core/Cartridge.cpp
+    src/core/PPU.cpp
+    src/core/PPUBus.cpp
+    src/input/Controller.cpp
+)
 target_include_directories(test_cpu_bus PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(test_cpu_bus PRIVATE SDL3::SDL3)
 
 add_test(NAME test_cpu_bus COMMAND test_cpu_bus)
 
-add_executable(test_cpu tests/test_cpu.cpp src/CPU.cpp src/CPUBus.cpp src/Controller.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp src/APU.cpp)
+add_executable(test_cpu
+    tests/test_cpu.cpp
+    src/core/APU.cpp
+    src/core/CPU.cpp
+    src/core/CPUBus.cpp
+    src/core/Cartridge.cpp
+    src/core/PPU.cpp
+    src/core/PPUBus.cpp
+    src/input/Controller.cpp
+)
 target_include_directories(test_cpu PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(test_cpu PRIVATE SDL3::SDL3)
 
 add_test(NAME test_cpu COMMAND test_cpu)
 
-add_executable(test_cartridge tests/test_cartridge.cpp src/Cartridge.cpp)
+add_executable(test_cartridge
+    tests/test_cartridge.cpp
+    src/core/Cartridge.cpp
+)
 target_include_directories(test_cartridge PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
 add_test(NAME test_cartridge COMMAND test_cartridge)
 
-add_executable(test_ppu_bus tests/test_ppu_bus.cpp src/PPUBus.cpp src/Cartridge.cpp)
+add_executable(test_ppu_bus
+    tests/test_ppu_bus.cpp
+    src/core/Cartridge.cpp
+    src/core/PPUBus.cpp
+)
 target_include_directories(test_ppu_bus PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
 add_test(NAME test_ppu_bus COMMAND test_ppu_bus)
 
-add_executable(test_ppu tests/test_ppu.cpp src/PPU.cpp src/PPUBus.cpp src/Cartridge.cpp)
+add_executable(test_ppu
+    tests/test_ppu.cpp
+    src/core/Cartridge.cpp
+    src/core/PPU.cpp
+    src/core/PPUBus.cpp
+)
 target_include_directories(test_ppu PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_compile_definitions(test_ppu PRIVATE TBS_PPU_TEST_ACCESS)
 

@@ -8,11 +8,11 @@
 #include <vector>
 
 #define private public
-#include "CPU.h"
+#include "core/CPU.h"
 #undef private
 
-#include "CPUBus.h"
-#include "Cartridge.h"
+#include "core/CPUBus.h"
+#include "core/Cartridge.h"
 
 namespace {
 

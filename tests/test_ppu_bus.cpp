@@ -1,5 +1,5 @@
-#include "Cartridge.h"
-#include "PPUBus.h"
+#include "core/Cartridge.h"
+#include "core/PPUBus.h"
 
 #include <array>
 #include <cstdint>

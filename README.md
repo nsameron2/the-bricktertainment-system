@@ -101,9 +101,11 @@ ctest --test-dir build --output-on-failure
 | `Cartridge` | Parses iNES files and maps NROM PRG/CHR data |
 | `APU` | Clocks audio channels, mixes samples, and feeds SDL3 audio |
 | `Controller` | Models the NES controller latch and serial shift register |
+| `Console` | Owns, connects, and clocks the emulated hardware |
 | `Display` | Presents the framebuffer and translates SDL3 keyboard events |
+| `Benchmark` | Runs the console headlessly and reports emulation throughput |
 
-The CPU and PPU use separate address spaces and buses, matching the physical console. `main.cpp` acts as the system clock: it advances the PPU three times per CPU clock, accounts for DMA stalls, clocks the APU, and presents completed frames.
+The CPU and PPU use separate address spaces and buses, matching the physical console. `Console` owns the system clock: it advances the PPU three times per CPU clock, accounts for DMA stalls, and clocks the APU. `main.cpp` selects interactive or benchmark mode and handles the SDL3 frontend in interactive mode.
 
 ## Project Layout
 
@@ -111,8 +113,17 @@ The CPU and PPU use separate address spaces and buses, matching the physical con
 .github/    GitHub Actions workflows
 assets/      Static media and other project resources
 include/     Component interfaces
+  benchmark/ Benchmark interfaces
+  core/      Emulated hardware and console interfaces
+  frontend/  Display interfaces
+  input/     Controller and input interfaces
 packaging/   Platform-specific distribution metadata
-src/         Emulator and SDL3 implementations
+src/         Implementations
+  benchmark/ Headless performance benchmarking
+  core/      Emulated hardware and console orchestration
+  frontend/  SDL3 display frontend
+  input/     Controller and input handling
+  main.cpp   Application entry point
 tests/       Standalone unit-test targets
 CMakeLists.txt
 ```

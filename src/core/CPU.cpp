@@ -1,5 +1,5 @@
-#include "CPU.h"
-#include "CPUBus.h"
+#include "core/CPU.h"
+#include "core/CPUBus.h"
 
 namespace {
 

@@ -1,8 +1,8 @@
-#include "CPUBus.h"
-#include "Cartridge.h"
-#include "Controller.h"
-#include "PPU.h"
-#include "APU.h"
+#include "core/CPUBus.h"
+#include "core/Cartridge.h"
+#include "core/PPU.h"
+#include "core/APU.h"
+#include "input/Controller.h"
 
 namespace {
 

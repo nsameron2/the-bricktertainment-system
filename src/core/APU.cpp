@@ -1,5 +1,5 @@
-#include "APU.h"
-#include "CPUBus.h"
+#include "core/APU.h"
+#include "core/CPUBus.h"
 
 #include <SDL3/SDL.h>
 

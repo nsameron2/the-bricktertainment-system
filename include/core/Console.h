@@ -3,13 +3,13 @@
 #include <array>
 #include <cstdint>
 
-#include "APU.h"
-#include "CPUBus.h"
-#include "CPU.h"
-#include "Cartridge.h"
-#include "Controller.h"
-#include "PPU.h"
-#include "PPUBus.h"
+#include "core/APU.h"
+#include "core/CPUBus.h"
+#include "core/CPU.h"
+#include "core/Cartridge.h"
+#include "core/PPU.h"
+#include "core/PPUBus.h"
+#include "input/Controller.h"
 
 
 class Console {
