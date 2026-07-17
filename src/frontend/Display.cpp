@@ -3,12 +3,18 @@
 
 #include <SDL3/SDL.h>
 
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 
 namespace {
 
 constexpr const char* WINDOW_TITLE = "The Bricktertainment System";
+constexpr double NTSC_FRAME_RATE = 60.0988;
+const auto FRAME_DURATION = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+    std::chrono::duration<double>(1.0 / NTSC_FRAME_RATE)
+);
 
 
 void logSdlError(const char* operation) {
@@ -72,6 +78,7 @@ bool Display::initialize() {
         return false;
     }
 
+    nextFrameDeadline = FrameClock::now() + FRAME_DURATION;
     initialized = true;
     return true;
 }
@@ -140,7 +147,20 @@ bool Display::present(const std::array<uint32_t, SCREEN_WIDTH * SCREEN_HEIGHT>& 
         return false;
     }
 
+    paceFrame();
     return true;
+}
+
+void Display::paceFrame() {
+    const auto now = FrameClock::now();
+    if (now < nextFrameDeadline) {
+        std::this_thread::sleep_until(nextFrameDeadline);
+    } else {
+        // Drop accumulated lateness instead of running several catch-up frames.
+        nextFrameDeadline = now;
+    }
+
+    nextFrameDeadline += FRAME_DURATION;
 }
 
 void Display::shutdown() {
@@ -164,6 +184,7 @@ void Display::shutdown() {
         sdlInitialized = false;
     }
 
+    nextFrameDeadline = {};
     initialized = false;
 }
 

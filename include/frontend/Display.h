@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 
 struct SDL_Renderer;
@@ -28,14 +29,18 @@ public:
     void shutdown();
 
 private:
+    using FrameClock = std::chrono::steady_clock;
+
     bool createWindow();
     bool createRenderer();
     bool createTexture();
+    void paceFrame();
 
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* texture = nullptr;
 
+    FrameClock::time_point nextFrameDeadline{};
     bool sdlInitialized = false;
     bool initialized = false;
 };
