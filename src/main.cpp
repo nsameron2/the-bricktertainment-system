@@ -5,17 +5,20 @@
 #include "benchmark/Benchmark.h"
 #include "core/Console.h"
 #include "frontend/Display.h"
+#include "input/InputRecording.h"
 
 
 namespace {
 
 constexpr std::string_view BENCHMARK_FLAG = "--benchmark";
+constexpr std::string_view RECORD_INPUT_FLAG = "--record-input";
 constexpr float DEFAULT_BENCHMARK_DURATION_SECONDS = 5.0F;
 
 
 void printUsage(const char* programName) {
     std::cerr << "USAGE: " << programName << " [rom.nes]\n"
-              << "       " << programName << " --benchmark [rom.nes]\n";
+              << "       " << programName << " --benchmark [rom.nes]\n"
+              << "       " << programName << " [rom.nes] --record-input [recording]\n";
 }
 
 }
@@ -29,6 +32,16 @@ int main(int argc, char* argv[]) {
 
         Benchmark benchmark;
         return benchmark.run(argv[2], DEFAULT_BENCHMARK_DURATION_SECONDS);
+    }
+
+    if(argc == 4 && std::string_view(argv[2]) == RECORD_INPUT_FLAG) {
+        InputRecording recording;
+        if(!recording.startRecording(argv[3], argv[1])) {
+            std::cerr << recording.getLastError() << '\n';
+            return EXIT_FAILURE;
+        }
+
+        return EXIT_SUCCESS;
     }
 
     if(argc != 2) {

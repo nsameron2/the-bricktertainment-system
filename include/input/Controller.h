@@ -17,6 +17,8 @@ public:
     };
 
     void setButton(Button button, bool pressed);
+    void setButtonState(uint8_t state);
+    uint8_t getButtonState() const;
 
     // CPU write to 0x4016 controls the controller strobe.
     void write(uint8_t data);

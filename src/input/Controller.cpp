@@ -22,6 +22,18 @@ void Controller::setButton(Button button, bool pressed) {
     }
 }
 
+void Controller::setButtonState(uint8_t state) {
+    buttonState = state;
+
+    if(strobe) {
+        latchButtons();
+    }
+}
+
+uint8_t Controller::getButtonState() const {
+    return buttonState;
+}
+
 void Controller::write(uint8_t data) {
     strobe = (data & CONTROLLER_STROBE_MASK) != 0x00;
 

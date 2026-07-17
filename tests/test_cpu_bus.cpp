@@ -207,6 +207,24 @@ int main() {
     bus.connectController1(&controller1);
     bus.connectController2(&controller2);
 
+    expectEqual(controller1.getButtonState(),
+                0x00,
+                "controller button-state snapshot initially returns 0x00");
+
+    controller1.setButtonState(0x89);
+    expectEqual(controller1.getButtonState(),
+                0x89,
+                "controller button-state snapshot returns the complete assigned state");
+
+    controller1.setButtonState(0x00);
+    controller1.write(0x01);
+    controller1.setButtonState(0x01);
+    expectEqual(controller1.read(),
+                0x01,
+                "setting complete controller state relatches while strobe is active");
+    controller1.setButtonState(0x00);
+    controller1.write(0x00);
+
     controller1.setButton(Controller::Button::A, true);
     controller1.setButton(Controller::Button::Start, true);
     controller1.setButton(Controller::Button::Left, true);
