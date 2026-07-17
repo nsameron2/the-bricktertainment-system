@@ -2,5 +2,6 @@
 
 class Benchmark {
 public:
-    int run(const char* romPath, float runTime);
+    int runTimed(const char* romPath, float runTime);
+    int runInput(const char* romPath, const char* moviePath);
 };

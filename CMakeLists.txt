@@ -110,3 +110,22 @@ target_include_directories(test_ppu PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_compile_definitions(test_ppu PRIVATE TBS_PPU_TEST_ACCESS)
 
 add_test(NAME test_ppu COMMAND test_ppu)
+
+add_executable(test_input_recording
+    tests/test_input_recording.cpp
+    src/benchmark/Benchmark.cpp
+    src/core/APU.cpp
+    src/core/CPU.cpp
+    src/core/CPUBus.cpp
+    src/core/Cartridge.cpp
+    src/core/Console.cpp
+    src/core/PPU.cpp
+    src/core/PPUBus.cpp
+    src/frontend/Display.cpp
+    src/input/Controller.cpp
+    src/input/InputRecording.cpp
+)
+target_include_directories(test_input_recording PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(test_input_recording PRIVATE SDL3::SDL3)
+
+add_test(NAME test_input_recording COMMAND test_input_recording)
