@@ -1,6 +1,7 @@
-#include <charconv>
+#include <cerrno>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <string_view>
 
 #include "benchmark/Benchmark.h"
@@ -35,8 +36,19 @@ bool parseDuration(std::string_view text, float& duration) {
         return false;
     }
 
-    const auto result = std::from_chars(text.data(), text.data() + text.size(), duration);
-    return result.ec == std::errc{} && result.ptr == text.data() + text.size();
+    const std::string durationText(text);
+    char* parseEnd = nullptr;
+    errno = 0;
+    const float parsedDuration = std::strtof(durationText.c_str(), &parseEnd);
+
+    if(errno == ERANGE
+        || parseEnd == durationText.c_str()
+        || parseEnd != durationText.c_str() + durationText.size()) {
+        return false;
+    }
+
+    duration = parsedDuration;
+    return true;
 }
 
 }
