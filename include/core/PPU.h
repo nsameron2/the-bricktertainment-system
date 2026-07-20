@@ -67,6 +67,17 @@ class PPU {
             bool isSpriteZero = false;
         };
 
+        struct ScanlineSprite {
+            uint8_t x = 0x00;
+            uint8_t attributes = 0x00;
+            uint8_t patternLow = 0x00;
+            uint8_t patternHigh = 0x00;
+            bool isSpriteZero = false;
+        };
+
+        std::array<ScanlineSprite, 8> scanlineSprites{};
+        uint8_t scanlineSpriteCount = 0;
+
 
         uint16_t vramIncrement() const;
 
@@ -74,6 +85,7 @@ class PPU {
         void writeVram(uint16_t address, uint8_t data);
         uint8_t readVram(uint16_t address) const;
         Pixel getBackgroundPixel(uint16_t x, uint16_t y) const;
-        SpritePixel getSpritePixel(uint16_t x, uint16_t y) const;
+        SpritePixel getSpritePixel(uint16_t x) const;
+        void evaluateSpritesForScanline(uint16_t y);
         uint32_t nesColorToRgb(uint8_t colorIndex) const;
 };

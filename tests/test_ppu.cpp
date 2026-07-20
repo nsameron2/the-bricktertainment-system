@@ -347,7 +347,8 @@ int main() {
                   SPRITE_PALETTE_ONE | SPRITE_BEHIND_BACKGROUND,
                   0x00);
 
-        const auto firstSpritePixel = ppu.getSpritePixel(0x0000, 0x0001);
+        ppu.evaluateSpritesForScanline(0x0001);
+        const auto firstSpritePixel = ppu.getSpritePixel(0x0000);
         expectEqual(firstSpritePixel.pixel.colorIndex,
                     0x2E,
                     "sprite sampler skips transparent sprites and reads the sprite palette");
@@ -360,14 +361,16 @@ int main() {
 
         bus.write(0x0020, 0x01); // Tile 0x02, row 0: right pixel color bit 0 set.
         setSprite(ppu, 0x02, 0x00, 0x02, SPRITE_FLIP_HORIZONTAL, 0x08);
-        const auto horizontalFlipPixel = ppu.getSpritePixel(0x0008, 0x0001);
+        ppu.evaluateSpritesForScanline(0x0001);
+        const auto horizontalFlipPixel = ppu.getSpritePixel(0x0008);
         expectEqual(horizontalFlipPixel.pixel.colorIndex,
                     0x2D,
                     "horizontal sprite flip reverses the pattern column");
 
         bus.write(0x0037, 0x80); // Tile 0x03, row 7: left pixel color bit 0 set.
         setSprite(ppu, 0x03, 0x00, 0x03, SPRITE_FLIP_VERTICAL, 0x10);
-        const auto verticalFlipPixel = ppu.getSpritePixel(0x0010, 0x0001);
+        ppu.evaluateSpritesForScanline(0x0001);
+        const auto verticalFlipPixel = ppu.getSpritePixel(0x0010);
         expectEqual(verticalFlipPixel.pixel.colorIndex,
                     0x2D,
                     "vertical sprite flip reverses the pattern row");
@@ -375,7 +378,8 @@ int main() {
         bus.write(0x1040, 0x80); // Tile 0x04, row 0 in sprite pattern table 0x1000.
         setSprite(ppu, 0x04, 0x00, 0x04, 0x00, 0x18);
         ppu.writeRegister(0x2000, PPUCTRL_SPRITE_PATTERN_TABLE);
-        const auto spritePatternTablePixel = ppu.getSpritePixel(0x0018, 0x0001);
+        ppu.evaluateSpritesForScanline(0x0001);
+        const auto spritePatternTablePixel = ppu.getSpritePixel(0x0018);
         expectEqual(spritePatternTablePixel.pixel.colorIndex,
                     0x2D,
                     "PPUCTRL bit 3 selects sprite pattern table 0x1000");

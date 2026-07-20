@@ -80,7 +80,13 @@ constexpr std::array<uint32_t, 64> NES_PALETTE = {
 }
 
 void PPU::clock() {
-    if (scanline >= 0 && scanline < SCREEN_HEIGHT
+    const bool visibleScanline = scanline >= 0 && scanline < SCREEN_HEIGHT;
+
+    if (visibleScanline && cycle == 0) {
+        evaluateSpritesForScanline(static_cast<uint16_t>(scanline));
+    }
+
+    if (visibleScanline
         && cycle >= PPU_VISIBLE_CYCLE_START && cycle <= PPU_VISIBLE_CYCLE_END) {
         const uint16_t x = static_cast<uint16_t>(cycle - PPU_VISIBLE_CYCLE_START);
         const uint16_t y = static_cast<uint16_t>(scanline);
@@ -90,6 +96,7 @@ void PPU::clock() {
             false
         };
 
+        // Background
         const bool backgroundEnabled = (mask & PPUMASK_SHOW_BACKGROUND) != 0x00;
         const bool backgroundInLeftColumn = (mask & PPUMASK_SHOW_BACKGROUND_LEFT) != 0x00;
         const bool isInLeftColumn = x < LEFTMOST_SCREEN_PIXELS;
@@ -98,11 +105,12 @@ void PPU::clock() {
             pixel = getBackgroundPixel(x, y);
         }
 
+        // Sprites
         const bool spriteEnabled = (mask & PPUMASK_SHOW_SPRITES) != 0x00;
         const bool spriteInLeftColumn = (mask & PPUMASK_SHOW_SPRITES_LEFT) != 0x00;
 
         if(spriteEnabled && (!isInLeftColumn || spriteInLeftColumn)) {
-            const SpritePixel spritePixel = getSpritePixel(x, y);
+            const SpritePixel spritePixel = getSpritePixel(x);
 
             // Sprite 0 hit
             if (spritePixel.isSpriteZero
@@ -364,58 +372,34 @@ PPU::Pixel PPU::getBackgroundPixel(uint16_t x, uint16_t y) const {
     };
 }
 
-PPU::SpritePixel PPU::getSpritePixel(uint16_t x, uint16_t y) const {
-    // Scan the OAM for the right sprite
-    for (uint8_t spriteIndex = 0; spriteIndex < SPRITE_COUNT; spriteIndex++) {
-        const uint16_t oamOffset = static_cast<uint16_t>(spriteIndex) * OAM_BYTES_PER_SPRITE;
-
-        // OAM:
-        // byte 0: Y
-        // byte 1: tile ID
-        // byte 2: attributes
-        // byte 3: X
-        const uint16_t spriteY = static_cast<uint16_t>(oam[oamOffset]) + 1;
-        const uint16_t spriteX = oam[oamOffset + 3];
+PPU::SpritePixel PPU::getSpritePixel(uint16_t x) const {
+    // Scan the cached scanline sprites for the right sprite
+    for (uint8_t spriteIndex = 0; spriteIndex < scanlineSpriteCount; spriteIndex++) {
+        const ScanlineSprite& sprite = scanlineSprites[spriteIndex];
+        const uint16_t spriteX = sprite.x;
 
         // If the gotten sprite is out of bounds, go next
-        if (x < spriteX || x >= spriteX + TILE_SIZE
-            || y < spriteY || y >= spriteY + TILE_SIZE) {
+        if (x < spriteX || x >= spriteX + TILE_SIZE) {
             continue;
         }
 
-        const uint8_t tileId = oam[oamOffset + 1];
-        const uint8_t attrs = oam[oamOffset + 2];
-
         // Pattern decoding will decide whether this covering sprite is transparent
         uint16_t spriteLocalX = x - spriteX;
-        uint16_t spriteLocalY = y - spriteY;
 
-        if ((attrs & SPRITE_FLIP_HORIZONTAL) != 0x00) {
+        if ((sprite.attributes & SPRITE_FLIP_HORIZONTAL) != 0x00) {
             spriteLocalX = (TILE_SIZE - 1) - spriteLocalX;
         }
 
-        if ((attrs & SPRITE_FLIP_VERTICAL) != 0x00) {
-            spriteLocalY = (TILE_SIZE - 1) - spriteLocalY;
-        }
-
-        const uint16_t patternBase = (control & PPUCTRL_SPRITE_PATTERN_TABLE) ? 0x1000 : 0x0000;
-        const uint16_t patternAddress = patternBase
-            + (static_cast<uint16_t>(tileId) * BYTES_PER_PATTERN_TILE)
-            + spriteLocalY;
-
-        const uint8_t patternLow = readVram(patternAddress);
-        const uint8_t patternHigh = readVram(patternAddress + PATTERN_TILE_HIGH_PLANE_OFFSET);
-
         const uint8_t bit = static_cast<uint8_t>(7 - spriteLocalX);
         const uint8_t colorId = static_cast<uint8_t>(
-            (((patternHigh >> bit) & 0x01) << 1)
-            | ((patternLow >> bit) & 0x01));
+            (((sprite.patternHigh >> bit) & 0x01) << 1)
+            | ((sprite.patternLow >> bit) & 0x01));
 
         if (colorId == 0x00) {
             continue;
         }
 
-        const uint8_t paletteId = attrs & SPRITE_PALETTE_MASK;
+        const uint8_t paletteId = sprite.attributes & SPRITE_PALETTE_MASK;
         const uint16_t paletteAddress = SPRITE_PALETTE_START
             + (static_cast<uint16_t>(paletteId) * 4)
             + colorId;
@@ -425,12 +409,61 @@ PPU::SpritePixel PPU::getSpritePixel(uint16_t x, uint16_t y) const {
                 static_cast<uint8_t>(readVram(paletteAddress) & NES_PALETTE_INDEX_MASK),
                 true,
             },
-            (attrs & SPRITE_BEHIND_BACKGROUND) != 0x00,
-            spriteIndex == 0x00,
+            (sprite.attributes & SPRITE_BEHIND_BACKGROUND) != 0x00,
+            sprite.isSpriteZero,
         };
     }
 
     return {};
+}
+
+// Sprite data prepared once for the current visible scanline.
+void PPU::evaluateSpritesForScanline(uint16_t y) {
+    scanlineSpriteCount = 0;
+
+    const uint16_t patternBase = (control & PPUCTRL_SPRITE_PATTERN_TABLE) ? 0x1000 : 0x0000;
+
+    // Scan the OAM for sprites on the current scanline
+    for (uint8_t spriteIndex = 0; spriteIndex < SPRITE_COUNT; spriteIndex++) {
+        const uint16_t oamOffset = static_cast<uint16_t>(spriteIndex) * OAM_BYTES_PER_SPRITE;
+
+        // OAM:
+        // byte 0: Y
+        // byte 1: tile ID
+        // byte 2: attributes
+        // byte 3: X
+        const uint16_t spriteY = static_cast<uint16_t>(oam[oamOffset]) + 1;
+
+        // If the gotten sprite is out of bounds, go next
+        if (y < spriteY || y >= spriteY + TILE_SIZE) {
+            continue;
+        }
+
+        const uint8_t tileId = oam[oamOffset + 1];
+        const uint8_t attrs = oam[oamOffset + 2];
+        uint16_t spriteLocalY = y - spriteY;
+
+        if ((attrs & SPRITE_FLIP_VERTICAL) != 0x00) {
+            spriteLocalY = (TILE_SIZE - 1) - spriteLocalY;
+        }
+
+        const uint16_t patternAddress = patternBase
+            + (static_cast<uint16_t>(tileId) * BYTES_PER_PATTERN_TILE)
+            + spriteLocalY;
+
+        scanlineSprites[scanlineSpriteCount] = {
+            oam[oamOffset + 3],
+            attrs,
+            readVram(patternAddress),
+            readVram(patternAddress + PATTERN_TILE_HIGH_PLANE_OFFSET),
+            spriteIndex == 0x00,
+        };
+        scanlineSpriteCount++;
+
+        if (scanlineSpriteCount == scanlineSprites.size()) {
+            break;
+        }
+    }
 }
 
 uint32_t PPU::nesColorToRgb(uint8_t colorIndex) const {
